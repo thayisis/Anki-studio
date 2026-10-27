@@ -1,26 +1,25 @@
-# Anki Studio — prototype 0.1
+# Anki Studio V2
 
-Une première version gratuite, locale et modifiable. Interface Streamlit, comparaison PDF et carte, correction HTML et export `.apkg` des cartes classiques.
+Prototype Streamlit gratuit, utilisable depuis Safari sur iPad.
 
-## Démarrage sur Mac
+## Déploiement sur GitHub
 
-1. Installer Python 3.11+.
-2. Dans le Terminal, ouvrir ce dossier : `cd /chemin/vers/anki_studio`
-3. Installer : `python3 -m pip install -r requirements.txt`
-4. Démarrer : `python3 -m streamlit run app.py --server.address 0.0.0.0`
-5. Ouvrir sur Mac : `http://localhost:8501`.
-6. Sur iPad, connecté au même Wi-Fi, ouvrir `http://ADRESSE_IP_DU_MAC:8501` (remplacer par l'IP locale du Mac). Le Mac doit rester allumé. Ne pas exposer ce serveur sur Internet sans sécurisation.
+Remplacez les fichiers `app.py`, `requirements.txt` et `README.md` à la racine de votre dépôt GitHub par ceux de cette archive. Faites **Commit changes**. Streamlit Community Cloud redémarre normalement automatiquement l'application.
 
-## Limitations importantes
+## Nouveautés
 
-- Il faut un PDF dont les marqueurs CARTE sont sur des lignes isolées.
-- Le premier texte après CARTE devient le recto, les autres lignes le verso. C'est une **hypothèse**, à adapter à la structure exacte des PDF de l'utilisateur.
-- L'indentation est déduite des coordonnées X des lignes : elle n'est pas encore validée contre les règles précises de l'utilisateur.
-- Les images ne sont pas extraites ni ajoutées aux cartes. Les cartes CLOZE et OCCLUSION sont détectées, mais leur export est bloqué tant que leur prise en charge n'est pas développée.
-- L'aperçu est HTML, pas un rendu garanti identique au moteur d'AnkiMobile.
-- Pas de sauvegarde permanente des modifications, de tests exhaustifs, ni de validation automatique de fidélité.
-- Utiliser uniquement des PDF de confiance ; le HTML des champs est affiché tel quel dans l'interface.
+- Découpe des sections par marqueurs `CARTE`, `CARTE CLOZE`, `CARTE OCCLUSION`.
+- Aperçu de la **zone du PDF original** correspondant à la carte, même pour les PDF d'une seule page très longue.
+- Prévisualisation recto/verso et édition HTML.
+- Aperçu des images présentes dans les sections.
+- Export `.apkg` avec médias pour les documents ne contenant que des cartes classiques.
+- Blocage de l'export complet si des cartes Cloze ou Occlusion sont présentes.
 
-## Étape suivante
+## Limites connues
 
-Tester sur un vrai PDF représentatif et définir les règles exactes de segmentation, hiérarchie, images, cloze et occlusion avant de qualifier la conversion de fiable.
+- L'indentation est estimée par les positions horizontales et doit être vérifiée.
+- Les images sont ajoutées après le texte, pas nécessairement à leur position exacte.
+- Les clozes et occlusions ne sont pas encore exportables.
+- Le PDF est envoyé au serveur Streamlit lors de l'import, même si aucune API d'IA n'est utilisée.
+- Les PDF très volumineux peuvent dépasser les ressources du service gratuit.
+- Cette V2 est un prototype de test, pas une conversion garantie fidèle.
