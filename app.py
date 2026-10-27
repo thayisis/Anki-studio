@@ -9,56 +9,103 @@ from pathlib import Path
 import fitz
 import streamlit as st
 
-st.set_page_config(page_title='Anki Studio V2', page_icon='📚', layout='wide')
-st.title('📚 Anki Studio V2')
+st.set_page_config(page_title='Anki Studio V3', page_icon='📚', layout='wide')
+st.title('📚 Anki Studio V3')
 st.caption('Comparaison avec le PDF original • aperçu et corrections • export prudent')
 st.info('Les PDF sont traités par le serveur Streamlit, pas par une API d’IA. Sur un hébergement public, n’importez pas de documents confidentiels.')
 MARKER = re.compile(r'^CARTE(?:\s+(?:CLOZE|OCCLUSION))?$', re.I)
 PREFIX = re.compile(r'^\s*(?:[•○§□®◊–\-]|\d+[.)])\s*')
 
+def normalize_lines(texts):
+    """Group glyphs sharing a baseline; join wrapped continuations by text position."""
+    if not texts:
+        return [], []
+    lines = []
+    for item in sorted(texts, key=lambda t:(t['y'],t['x'])):
+        # Bullet glyphs are separate PDF spans and can be offset vertically.
+        candidates = [ln for ln in lines if abs(ln['y']-item['y']) <= max(6, item['bbox'].height * .55)]
+        if candidates:
+            ln = min(candidates,key=lambda l:abs(l['y']-item['y']))
+            ln['parts'].append(item)
+        else:
+            lines.append({'y':item['y'],'parts':[item]})
+    out=[]
+    for line in sorted(lines,key=lambda l:l['y']):
+        parts=sorted(line['parts'],key=lambda t:t['x'])
+        joined=' '.join(t['text'] for t in parts).strip()
+        bullets={'•','○','§','□','®','◊','-','–','−','▪','◦'}
+        first=parts[0]['text'].strip()
+        is_bullet=first in bullets or bool(re.match(r'^\d+[.)]$',first))
+        text_x=parts[1]['x'] if is_bullet and len(parts)>1 else parts[0]['x']
+        out.append({'text':joined,'x':text_x,'marker_x':parts[0]['x'] if is_bullet else None,
+                    'bullet':is_bullet,'y':line['y'],'bbox':parts[0]['bbox']})
+    merged=[]
+    for line in out:
+        if merged and not line['bullet'] and not MARKER.fullmatch(line['text']):
+            previous=merged[-1]
+            # Continuation lines have the same content start; bullets start further left.
+            if (abs(line['x']-previous['x']) < 4.5 and
+                line['y']-previous['y'] < 40 and not MARKER.fullmatch(previous['text'])):
+                previous['text'] += ' ' + line['text']
+                previous['y']=line['y']
+                continue
+        merged.append(line.copy())
+    warnings=[]
+    if any(x['text'].strip() in {'•','○','§','□','®','◊','-','–'} for x in merged):
+        warnings.append('Puces isolées : vérifier le découpage.')
+    return merged,warnings
+
 def parse_pdf(data):
-    doc = fitz.open(stream=data, filetype='pdf')
-    result = []
-    for pno, page in enumerate(doc):
-        blocks = page.get_text('dict', sort=False)['blocks']
-        items = []
-        for block in blocks:
-            if block['type'] == 1:
-                items.append({'kind':'image','bbox':fitz.Rect(block['bbox']),'y':block['bbox'][1], 'x':block['bbox'][0]})
-            elif block['type'] == 0:
+    doc=fitz.open(stream=data,filetype='pdf')
+    result=[]
+    for pno,page in enumerate(doc):
+        items=[]
+        for block in page.get_text('dict',sort=False)['blocks']:
+            if block['type']==1:
+                items.append({'kind':'image','bbox':fitz.Rect(block['bbox']),'y':block['bbox'][1],'x':block['bbox'][0]})
+            elif block['type']==0:
                 for line in block['lines']:
-                    spans = line['spans']
-                    if not spans: continue
-                    txt = ''.join(s['text'] for s in spans).strip()
+                    spans=line['spans']
+                    if not spans:continue
+                    txt=''.join(s['text'] for s in spans).strip()
                     if txt:
                         bbox=fitz.Rect(line['bbox'])
                         items.append({'kind':'text','text':txt,'bbox':bbox,'x':bbox.x0,'y':bbox.y0})
         items.sort(key=lambda it:(round(it['y'],1),it['x']))
         markers=[(i,it) for i,it in enumerate(items) if it['kind']=='text' and MARKER.fullmatch(it['text'])]
         for j,(start,marker) in enumerate(markers):
-            end = markers[j+1][0] if j+1<len(markers) else len(items)
-            # Marker blocks are delimited by the next marker, even if the page is very tall.
+            end=markers[j+1][0] if j+1<len(markers) else len(items)
             contents=items[start+1:end]
             texts=[it for it in contents if it['kind']=='text']
             images=[it for it in contents if it['kind']=='image']
-            if not texts and not images: continue
-            title=texts[0]['text'] if texts else 'Carte image'
-            # Only use a separate front title if first line is an unbulleted heading.
-            is_heading=bool(texts) and not PREFIX.match(title)
+            if not texts and not images:continue
+            normalized,warnings=normalize_lines(texts)
+            if not normalized and not images:continue
+            first=normalized[0] if normalized else {'text':'Carte image','bullet':False}
+            title=first['text']
+            is_heading=not first['bullet'] and not PREFIX.match(title)
             front=title if is_heading else (PREFIX.sub('',title) or title)
-            body=texts[1:] if is_heading else texts
-            # Preserve line positions, not inferred list semantics. This avoids fabricated hierarchy.
-            base=min((it['x'] for it in body),default=0)
+            body=normalized[1:] if is_heading else normalized
+            # Indentation comes from the content start, not from bullet glyph widths.
+            xlevels=sorted(set(round(it['x']/5)*5 for it in body))
+            levels=[]
+            for x in xlevels:
+                if not levels or x-levels[-1]>8:levels.append(x)
             fragments=[]
             for it in body:
-                indent=max(0,min(240,round((it['x']-base)*0.85)))
-                fragments.append(f'<div style="margin-left:{indent}px;white-space:pre-wrap">{html.escape(it["text"])}</div>')
+                level=min(range(len(levels)),key=lambda k:abs(it['x']-levels[k])) if levels else 0
+                # margin is based on observed positions, without fabricating nested lists.
+                indent=min(220,level*22)
+                fragments.append(f'<div style="margin-left:{indent}px;white-space:normal;margin-bottom:4px">{html.escape(it["text"])}</div>')
             top=marker['bbox'].y0
             bottom=(markers[j+1][1]['bbox'].y0 if j+1<len(markers) else max([it['bbox'].y1 for it in contents],default=marker['bbox'].y1)+12)
             bottom=min(bottom,page.rect.y1)
+            if images:warnings.append('Images : emplacement dans le verso à contrôler.')
+            if any(it['text'].strip() in {'•','○','§','□','®','◊','-','–'} for it in body):warnings.append('Puces isolées après regroupement.')
             result.append({'page':pno,'type':marker['text'].upper(),'front':html.escape(front),
-                           'back':'\n'.join(fragments),'images':images,'bbox':(0,max(0,top-8),page.rect.x1,max(top+1,bottom)),
-                           'text_count':len(texts),'warnings':(['Image(s) présentes : leur position doit être contrôlée dans le verso.' ] if images else [])})
+                           'back':'\n'.join(fragments),'images':images,
+                           'bbox':(0,max(0,top-8),page.rect.x1,max(top+1,bottom)),
+                           'text_count':len(texts),'warnings':warnings})
     doc.close()
     return result
 
@@ -97,29 +144,31 @@ idx=st.number_input('Carte à vérifier',min_value=1,max_value=len(cards),value=
 st.session_state['card_index']=idx
 card=cards[idx]
 doc=fitz.open(stream=data,filetype='pdf')
-left,right=st.columns(2)
+left,right=st.columns(2,gap='small')
 with left:
-    st.subheader('PDF original — zone de la carte')
+    st.subheader('PDF original')
     try:
         png=crop_png(doc,card)
-        if png: st.image(png,use_container_width=True)
+        if png:st.image(png,use_container_width=True)
     except Exception as exc:st.error(f'Aperçu PDF indisponible : {exc}')
-    st.caption(f'Page source : {card["page"]+1} · Type : {card["type"]} · Images détectées : {len(card["images"])}')
+    st.caption(f'Page : {card["page"]+1} · {card["type"]} · Images : {len(card["images"])}')
 with right:
-    st.subheader('Carte générée — éditable')
-    card['front']=st.text_area('Recto (HTML)',value=card['front'],height=90,key=f'front_{digest}_{idx}')
-    card['back']=st.text_area('Verso (HTML)',value=card['back'],height=220,key=f'back_{digest}_{idx}')
-    side=st.radio('Aperçu',['Recto','Verso'],horizontal=True)
+    st.subheader('Aperçu Anki')
+    side=st.radio('Côté de la carte',['Verso','Recto'],horizontal=True)
     preview=card['front'] if side=='Recto' else card['back']
     if side=='Verso' and card['images']:
         for k,im in enumerate(card['images']):
             try:
                 raw=image_png(doc[card['page']],im['bbox'])
-                if raw: preview+=f'<p><img style="max-width:100%;height:auto" src="data:image/png;base64,{base64.b64encode(raw).decode()}"></p>'
-            except Exception: pass
-    st.markdown('<div style="border:1px solid #aaa;border-radius:12px;padding:18px;overflow-wrap:anywhere;max-height:550px;overflow-y:auto">'+preview+'</div>',unsafe_allow_html=True)
-    if card['images']:st.warning('Les images sont montrées après le texte pour contrôle : leur emplacement exact dans la carte reste à valider.')
-    if card['type']!='CARTE':st.warning('Type Cloze / Occlusion : aperçu seulement, export non pris en charge.')
+                if raw:preview+=f'<p><img style="max-width:100%;height:auto" src="data:image/png;base64,{base64.b64encode(raw).decode()}"></p>'
+            except Exception:pass
+    st.markdown('<div style="border:1px solid #aaa;border-radius:12px;padding:16px;overflow-wrap:anywhere;max-height:650px;overflow-y:auto">'+preview+'</div>',unsafe_allow_html=True)
+    for warning in card['warnings']:st.warning(warning)
+    if card['type']!='CARTE':st.warning('Cloze / Occlusion : aperçu uniquement, export non pris en charge.')
+with st.expander('✏️ Modifier le HTML du recto / verso',expanded=False):
+    card['front']=st.text_area('Recto (HTML)',value=card['front'],height=90,key=f'front_{digest}_{idx}')
+    card['back']=st.text_area('Verso (HTML)',value=card['back'],height=260,key=f'back_{digest}_{idx}')
+    st.caption('Les modifications sont visibles dans l’aperçu après actualisation du formulaire.')
 doc.close()
 st.divider()
 st.subheader('Export Anki')
@@ -133,7 +182,7 @@ else:
         name=st.text_input('Nom du paquet',value=f'Anki Studio — {Path(upload.name).stem}')
         if st.button('Préparer le paquet .apkg'):
             with st.spinner('Préparation des médias et du paquet…'):
-                model=genanki.Model(1607392319,'Anki Studio Basic V2',fields=[{'name':'Front'},{'name':'Back'}],templates=[{'name':'Card 1','qfmt':'{{Front}}','afmt':'{{FrontSide}}<hr id="answer">{{Back}}'}])
+                model=genanki.Model(1607392319,'Anki Studio Basic V3',fields=[{'name':'Front'},{'name':'Back'}],templates=[{'name':'Card 1','qfmt':'{{Front}}','afmt':'{{FrontSide}}<hr id="answer">{{Back}}'}])
                 deck=genanki.Deck(2059400110,name)
                 media=[]
                 with tempfile.TemporaryDirectory() as temp:
@@ -156,5 +205,5 @@ else:
                     st.session_state['export_digest']=digest
     except Exception as exc:st.error(f'Export impossible : {exc}')
     if st.session_state.get('export_digest')==digest and st.session_state.get('export_bytes'):
-        st.download_button('⬇️ Télécharger .apkg',st.session_state['export_bytes'],file_name='anki_studio_v2.apkg',mime='application/octet-stream')
-st.caption('V2 expérimentale : vérifier chaque ligne, image et indentation. Les retours à la ligne visuels du PDF et l’ordre de certaines images peuvent nécessiter une correction manuelle.')
+        st.download_button('⬇️ Télécharger .apkg',st.session_state['export_bytes'],file_name='anki_studio_v3.apkg',mime='application/octet-stream')
+st.caption('V3 expérimentale : vérifier chaque ligne, image et indentation. Les retours à la ligne visuels du PDF et l’ordre de certaines images peuvent nécessiter une correction manuelle.')
