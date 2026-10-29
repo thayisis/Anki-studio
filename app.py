@@ -1,26 +1,29 @@
 
 import hashlib
+import html
 import tempfile
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
+
 from engine import parse_pdf, preview_html, crop
 
 st.set_page_config(
-    page_title="Anki Studio V5",
+    page_title="Anki Studio V6",
     page_icon="📚",
     layout="wide"
 )
 
-st.title("📚 Anki Studio V5")
+st.title("📚 Anki Studio V6")
 st.caption(
-    "Puces hiérarchisées · images intégrées · "
-    "comparaison PDF / Anki"
+    "Titres contextualisés · puces hiérarchisées · "
+    "images · comparaison PDF / Anki"
 )
 
 uploaded = st.file_uploader(
     "Importer un PDF balisé CARTE",
-    type="pdf"
+    type=["pdf"]
 )
 
 if uploaded is None:
@@ -34,7 +37,9 @@ if st.session_state.get("digest") != digest:
         try:
             cards = parse_pdf(data)
         except Exception as error:
-            st.error(f"Erreur de lecture : {error}")
+            st.error(
+                f"Erreur pendant l'analyse : {error}"
+            )
             st.stop()
 
     st.session_state.update(
@@ -47,11 +52,21 @@ if st.session_state.get("digest") != digest:
 cards = st.session_state.cards
 
 if not cards:
-    st.warning("Aucune carte détectée.")
+    st.warning(
+        "Aucune carte détectée. Vérifie les marqueurs CARTE."
+    )
     st.stop()
 
-classic = sum(c["type"] == "CARTE" for c in cards)
-cloze = sum(c["type"] == "CARTE CLOZE" for c in cards)
+classic = sum(
+    c["type"] == "CARTE"
+    for c in cards
+)
+
+cloze = sum(
+    c["type"] == "CARTE CLOZE"
+    for c in cards
+)
+
 occlusion = sum(
     c["type"] == "CARTE OCCLUSION"
     for c in cards
@@ -69,7 +84,7 @@ index = st.selectbox(
     options=list(range(len(cards))),
     format_func=lambda i: (
         f"{i + 1}. "
-        f"{cards[i]['front'][:65]}"
+        f"{html.unescape(cards[i]['front'])[:65]}"
     )
 )
 
@@ -80,8 +95,39 @@ front, back = st.session_state.edits.get(
     (card["front"], card["back"])
 )
 
+suggested = card.get(
+    "suggested_front",
+    card["front"]
+)
+
+if suggested != card["front"]:
+    with st.expander(
+        "✨ Proposition de titre contextualisé",
+        expanded=False
+    ):
+        st.write(
+            html.unescape(suggested)
+        )
+
+        st.caption(
+            "Cette proposition est automatique. "
+            "Vérifie qu'elle reprend bien les titres "
+            "parents de cette section."
+        )
+
+        if st.button(
+            "Utiliser ce titre",
+            key=f"title_{index}"
+        ):
+            st.session_state.edits[index] = (
+                suggested,
+                back
+            )
+            st.session_state.apkg = None
+            st.rerun()
+
 side = st.radio(
-    "Afficher",
+    "Aperçu",
     ["Verso", "Recto"],
     horizontal=True
 )
@@ -94,27 +140,77 @@ zoom = st.slider(
     step=0.25
 )
 
-left, right = st.columns(2, gap="medium")
+left, right = st.columns(
+    2,
+    gap="medium"
+)
 
 with left:
     st.subheader("PDF original")
 
     try:
-        image = crop(data, card, zoom)
+        image = crop(
+            data,
+            card,
+            zoom
+        )
 
-        st.image(
-            image,
-            use_container_width=True
+        import base64
+
+        encoded = base64.b64encode(
+            image
+        ).decode("ascii")
+
+        document = f"""
+        <html>
+        <head>
+        <meta name="viewport"
+              content="width=device-width, initial-scale=1">
+        <style>
+            html, body {{
+                margin: 0;
+                padding: 0;
+                background: white;
+            }}
+            .viewport {{
+                width: 100%;
+                height: 760px;
+                overflow: auto;
+                border: 1px solid #aaa;
+                border-radius: 10px;
+                background: white;
+            }}
+            img {{
+                display: block;
+                width: auto;
+                max-width: none;
+                height: auto;
+            }}
+        </style>
+        </head>
+        <body>
+            <div class="viewport">
+                <img src="data:image/png;base64,{encoded}">
+            </div>
+        </body>
+        </html>
+        """
+
+        components.html(
+            document,
+            height=775,
+            scrolling=False
         )
 
         st.caption(
-            "Tu peux aussi zoomer avec les "
-            "gestes habituels de ton iPad."
+            "Fais défiler la zone du PDF pour "
+            "examiner les détails. Le curseur "
+            "modifie la taille réelle de l'image."
         )
 
     except Exception as error:
         st.error(
-            f"Impossible d'afficher le PDF : {error}"
+            f"Erreur d'affichage du PDF : {error}"
         )
 
 with right:
@@ -123,51 +219,87 @@ with right:
     content = (
         front
         if side == "Recto"
-        else preview_html(back, card["media"])
+        else preview_html(
+            back,
+            card["media"]
+        )
     )
 
-    st.markdown(
-        '<div style="'
-        'border:1px solid #999;'
-        'border-radius:12px;'
-        'padding:18px;'
-        'line-height:1.5;'
-        'overflow-wrap:anywhere;'
-        'max-height:900px;'
-        'overflow:auto;'
-        '">'
-        + content +
-        '</div>',
-        unsafe_allow_html=True
+    preview_document = f"""
+    <html>
+    <head>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+    <style>
+        body {{
+            margin: 0;
+            padding: 16px;
+            font-family: -apple-system,
+                         BlinkMacSystemFont,
+                         "Segoe UI",
+                         sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            color: #202124;
+            overflow-wrap: anywhere;
+        }}
+        img {{
+            max-width: 100%;
+            height: auto;
+        }}
+        .card {{
+            box-sizing: border-box;
+            border: 1px solid #aaa;
+            border-radius: 10px;
+            min-height: 120px;
+            padding: 16px;
+        }}
+    </style>
+    </head>
+    <body>
+        <div class="card">
+            {content}
+        </div>
+    </body>
+    </html>
+    """
+
+    components.html(
+        preview_document,
+        height=775,
+        scrolling=True
     )
 
     for warning in card["warnings"]:
         st.warning(warning)
 
 with st.expander(
-    "✏️ Modifier le recto ou le verso",
+    "✏️ Modifier la carte",
     expanded=False
 ):
-    with st.form("editor"):
+    with st.form(
+        key=f"editor_{index}"
+    ):
         edited_front = st.text_area(
             "Recto (HTML)",
             value=front,
-            height=100
+            height=110
         )
 
         edited_back = st.text_area(
             "Verso (HTML)",
             value=back,
-            height=320
+            height=340
         )
 
         if st.form_submit_button(
-            "Enregistrer cette carte"
+            "Enregistrer les modifications"
         ):
             st.session_state.edits[index] = (
                 edited_front,
                 edited_back
             )
+
             st.session_state.apkg = None
             st.rerun()
 
@@ -178,45 +310,48 @@ unsupported = cloze + occlusion
 
 if unsupported:
     st.error(
-        f"Export bloqué : {unsupported} cartes "
-        "Cloze/Occlusion nécessitent encore "
-        "un moteur d'export compatible."
+        f"Export désactivé : {unsupported} cartes "
+        "Cloze ou Occlusion ne sont pas encore "
+        "prises en charge. Aucun paquet incomplet "
+        "ne sera généré."
     )
 
 else:
     st.warning(
-        "Vérifie chaque carte avant l'export : "
-        "les alinéas et les images peuvent "
-        "encore nécessiter des corrections."
+        "V6 expérimentale : vérifie le texte, "
+        "les images et tous les niveaux de "
+        "hiérarchie avant d'exporter."
     )
 
-    checked = st.checkbox(
+    verified = st.checkbox(
         "J'ai vérifié les cartes et j'accepte "
         "cet export expérimental."
     )
 
-    if checked and st.button(
-        "Préparer le fichier Anki"
+    if verified and st.button(
+        "Préparer le paquet .apkg"
     ):
         try:
             import genanki
 
             model = genanki.Model(
                 1904830217,
-                "Anki Studio V5 Basic",
+                "Anki Studio V6 Basic",
                 fields=[
                     {"name": "Front"},
                     {"name": "Back"}
                 ],
-                templates=[{
-                    "name": "Card 1",
-                    "qfmt": "{{Front}}",
-                    "afmt": (
-                        "{{FrontSide}}"
-                        "<hr id='answer'>"
-                        "{{Back}}"
-                    )
-                }]
+                templates=[
+                    {
+                        "name": "Card 1",
+                        "qfmt": "{{Front}}",
+                        "afmt": (
+                            "{{FrontSide}}"
+                            "<hr id='answer'>"
+                            "{{Back}}"
+                        )
+                    }
+                ]
             )
 
             deck = genanki.Deck(
@@ -230,7 +365,10 @@ else:
                 for i, item in enumerate(cards):
                     f, b = st.session_state.edits.get(
                         i,
-                        (item["front"], item["back"])
+                        (
+                            item["front"],
+                            item["back"]
+                        )
                     )
 
                     for filename, raw in item["media"]:
@@ -244,36 +382,46 @@ else:
                     note = genanki.Note(
                         model=model,
                         fields=[f, b],
-                        guid=genanki.guid_for(digest, i)
+                        guid=genanki.guid_for(
+                            digest,
+                            i
+                        )
                     )
 
                     deck.add_note(note)
 
                 package = genanki.Package(deck)
+
                 package.media_files = list(
                     dict.fromkeys(paths)
                 )
 
                 output = Path(tmp) / "cards.apkg"
-                package.write_to_file(str(output))
+
+                package.write_to_file(
+                    str(output)
+                )
 
                 st.session_state.apkg = (
                     output.read_bytes()
                 )
 
         except Exception as error:
-            st.error(f"Erreur d'export : {error}")
+            st.error(
+                f"Erreur d'export : {error}"
+            )
 
     if st.session_state.get("apkg"):
         st.download_button(
-            "📥 Télécharger le paquet .apkg",
+            "📥 Télécharger le paquet Anki",
             data=st.session_state.apkg,
-            file_name="anki_studio_v5.apkg",
+            file_name="anki_studio_v6.apkg",
             mime="application/octet-stream"
         )
 
 st.caption(
-    "Anki Studio V5 — prototype expérimental. "
-    "La hiérarchie est déduite des coordonnées "
-    "du texte dans le PDF."
+    "Anki Studio V6 — prototype expérimental. "
+    "Les titres contextualisés sont des propositions "
+    "à valider. Les alinéas et les images nécessitent "
+    "encore un contrôle visuel."
 )
