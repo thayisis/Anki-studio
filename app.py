@@ -7,128 +7,120 @@ import streamlit as st
 from engine import parse_pdf, preview_html, crop
 
 st.set_page_config(
-    page_title="Anki Studio V4",
+    page_title="Anki Studio V5",
     page_icon="📚",
     layout="wide"
 )
 
-st.title("📚 Anki Studio V4 — laboratoire")
+st.title("📚 Anki Studio V5")
 st.caption(
-    "Comparaison côte à côte · texte et images "
-    "dans leur ordre vertical · contrôle avant export"
+    "Puces hiérarchisées · images intégrées · "
+    "comparaison PDF / Anki"
 )
 
-st.info(
-    "Prototype expérimental. Les PDF sont traités "
-    "sur le serveur Streamlit. Évite les documents "
-    "confidentiels sur un hébergement public."
-)
-
-up = st.file_uploader(
+uploaded = st.file_uploader(
     "Importer un PDF balisé CARTE",
     type="pdf"
 )
 
-if not up:
+if uploaded is None:
     st.stop()
 
-data = up.getvalue()
+data = uploaded.getvalue()
 digest = hashlib.sha256(data).hexdigest()
 
 if st.session_state.get("digest") != digest:
-    with st.spinner("Lecture de la structure du PDF…"):
+    with st.spinner("Analyse du PDF…"):
         try:
             cards = parse_pdf(data)
-        except Exception as e:
-            st.error(f"Erreur de lecture : {e}")
+        except Exception as error:
+            st.error(f"Erreur de lecture : {error}")
             st.stop()
 
     st.session_state.update(
         digest=digest,
         cards=cards,
-        edit={},
+        edits={},
         apkg=None
     )
 
 cards = st.session_state.cards
 
 if not cards:
-    st.warning("Aucun marqueur CARTE détecté.")
+    st.warning("Aucune carte détectée.")
     st.stop()
 
-count = {
-    t: sum(c["type"] == t for c in cards)
-    for t in (
-        "CARTE",
-        "CARTE CLOZE",
-        "CARTE OCCLUSION"
-    )
-}
-
-st.write(
-    f"**{len(cards)} sections** · "
-    f"{count['CARTE']} classiques · "
-    f"{count['CARTE CLOZE']} Cloze · "
-    f"{count['CARTE OCCLUSION']} occlusions"
+classic = sum(c["type"] == "CARTE" for c in cards)
+cloze = sum(c["type"] == "CARTE CLOZE" for c in cards)
+occlusion = sum(
+    c["type"] == "CARTE OCCLUSION"
+    for c in cards
 )
 
-index = st.number_input(
-    "Carte",
-    min_value=1,
-    max_value=len(cards),
-    value=1,
-    step=1
-) - 1
+st.write(
+    f"**{len(cards)} cartes** · "
+    f"{classic} classiques · "
+    f"{cloze} Cloze · "
+    f"{occlusion} Occlusion"
+)
+
+index = st.selectbox(
+    "Choisir une carte",
+    options=list(range(len(cards))),
+    format_func=lambda i: (
+        f"{i + 1}. "
+        f"{cards[i]['front'][:65]}"
+    )
+)
 
 card = cards[index]
 
-front, back = st.session_state.edit.get(
+front, back = st.session_state.edits.get(
     index,
     (card["front"], card["back"])
 )
 
 side = st.radio(
-    "Aperçu",
+    "Afficher",
     ["Verso", "Recto"],
     horizontal=True
 )
 
 zoom = st.slider(
-    "Zoom PDF",
-    min_value=0.8,
+    "Zoom du PDF original",
+    min_value=1.0,
     max_value=3.0,
-    value=1.8,
-    step=0.2
+    value=2.0,
+    step=0.25
 )
 
-left, right = st.columns(
-    2,
-    gap="medium"
-)
+left, right = st.columns(2, gap="medium")
 
 with left:
     st.subheader("PDF original")
 
     try:
+        image = crop(data, card, zoom)
+
         st.image(
-            crop(data, card, zoom),
+            image,
             use_container_width=True
         )
-    except Exception as e:
-        st.error(
-            f"Impossible de rendre cet extrait : {e}"
+
+        st.caption(
+            "Tu peux aussi zoomer avec les "
+            "gestes habituels de ton iPad."
         )
 
-    st.caption(
-        f"Page {card['page'] + 1} · "
-        f"{card['type']} · "
-        f"{len(card['media'])} images"
-    )
+    except Exception as error:
+        st.error(
+            f"Impossible d'afficher le PDF : {error}"
+        )
 
 with right:
-    st.subheader("Aperçu de la carte")
+    st.subheader("Carte Anki")
 
-    body = (
+    content = (
         front
         if side == "Recto"
         else preview_html(back, card["media"])
@@ -136,152 +128,152 @@ with right:
 
     st.markdown(
         '<div style="'
-        'border:1px solid #aaa;'
-        'border-radius:10px;'
-        'padding:16px;'
-        'max-height:780px;'
+        'border:1px solid #999;'
+        'border-radius:12px;'
+        'padding:18px;'
+        'line-height:1.5;'
+        'overflow-wrap:anywhere;'
+        'max-height:900px;'
         'overflow:auto;'
-        'overflow-wrap:anywhere'
         '">'
-        + body +
+        + content +
         '</div>',
         unsafe_allow_html=True
     )
 
-    for issue in card["warnings"]:
-        st.warning(issue)
+    for warning in card["warnings"]:
+        st.warning(warning)
 
 with st.expander(
-    "✏️ Modifier la carte (HTML)",
+    "✏️ Modifier le recto ou le verso",
     expanded=False
 ):
-    with st.form("edit"):
-        f = st.text_area(
-            "Recto",
+    with st.form("editor"):
+        edited_front = st.text_area(
+            "Recto (HTML)",
             value=front,
-            height=90
+            height=100
         )
 
-        b = st.text_area(
-            "Verso",
+        edited_back = st.text_area(
+            "Verso (HTML)",
             value=back,
-            height=260
+            height=320
         )
 
         if st.form_submit_button(
-            "Enregistrer les modifications"
+            "Enregistrer cette carte"
         ):
-            st.session_state.edit[index] = (f, b)
+            st.session_state.edits[index] = (
+                edited_front,
+                edited_back
+            )
             st.session_state.apkg = None
             st.rerun()
 
 st.divider()
-st.subheader("Export Anki (expérimental)")
+st.subheader("Exporter vers Anki")
 
-unsupported = sum(
-    c["type"] != "CARTE"
-    for c in cards
-)
+unsupported = cloze + occlusion
 
 if unsupported:
     st.error(
-        f"Export désactivé : {unsupported} sections "
-        "Cloze/Occlusion non prises en charge. "
-        "Aucun export incomplet."
+        f"Export bloqué : {unsupported} cartes "
+        "Cloze/Occlusion nécessitent encore "
+        "un moteur d'export compatible."
     )
 
 else:
     st.warning(
-        "Avant export, vérifie chaque carte et "
-        "chaque image. Des anomalies restent possibles."
+        "Vérifie chaque carte avant l'export : "
+        "les alinéas et les images peuvent "
+        "encore nécessiter des corrections."
     )
 
-    verified = st.checkbox(
-        "J'ai vérifié les cartes et accepte "
-        "un export expérimental"
+    checked = st.checkbox(
+        "J'ai vérifié les cartes et j'accepte "
+        "cet export expérimental."
     )
 
-    if verified:
-        if st.button("Préparer le .apkg"):
-            try:
-                import genanki
+    if checked and st.button(
+        "Préparer le fichier Anki"
+    ):
+        try:
+            import genanki
 
-                model = genanki.Model(
-                    1904830217,
-                    "Anki Studio V4 Basic",
-                    fields=[
-                        {"name": "Front"},
-                        {"name": "Back"}
-                    ],
-                    templates=[{
-                        "name": "Card 1",
-                        "qfmt": "{{Front}}",
-                        "afmt": (
-                            '{{FrontSide}}'
-                            '<hr id="answer">'
-                            '{{Back}}'
-                        )
-                    }]
-                )
-
-                deck = genanki.Deck(
-                    1904830218,
-                    Path(up.name).stem
-                )
-
-                with tempfile.TemporaryDirectory() as tmp:
-                    paths = []
-
-                    for i, c in enumerate(cards):
-                        f, b = st.session_state.edit.get(
-                            i,
-                            (c["front"], c["back"])
-                        )
-
-                        for name, raw in c["media"]:
-                            path = Path(tmp) / name
-
-                            if not path.exists():
-                                path.write_bytes(raw)
-
-                            paths.append(str(path))
-
-                        note = genanki.Note(
-                            model=model,
-                            fields=[f, b],
-                            guid=genanki.guid_for(digest, i)
-                        )
-
-                        deck.add_note(note)
-
-                    package = genanki.Package(deck)
-
-                    package.media_files = list(
-                        dict.fromkeys(paths)
+            model = genanki.Model(
+                1904830217,
+                "Anki Studio V5 Basic",
+                fields=[
+                    {"name": "Front"},
+                    {"name": "Back"}
+                ],
+                templates=[{
+                    "name": "Card 1",
+                    "qfmt": "{{Front}}",
+                    "afmt": (
+                        "{{FrontSide}}"
+                        "<hr id='answer'>"
+                        "{{Back}}"
                     )
-
-                    path = Path(tmp) / "cards.apkg"
-
-                    package.write_to_file(str(path))
-
-                    st.session_state.apkg = (
-                        path.read_bytes()
-                    )
-
-            except Exception as e:
-                st.error(f"Erreur export : {e}")
-
-        if st.session_state.get("apkg"):
-            st.download_button(
-                "Télécharger le .apkg",
-                st.session_state.apkg,
-                file_name="anki_studio_v4.apkg",
-                mime="application/octet-stream"
+                }]
             )
 
+            deck = genanki.Deck(
+                1904830218,
+                Path(uploaded.name).stem
+            )
+
+            with tempfile.TemporaryDirectory() as tmp:
+                paths = []
+
+                for i, item in enumerate(cards):
+                    f, b = st.session_state.edits.get(
+                        i,
+                        (item["front"], item["back"])
+                    )
+
+                    for filename, raw in item["media"]:
+                        path = Path(tmp) / filename
+
+                        if not path.exists():
+                            path.write_bytes(raw)
+
+                        paths.append(str(path))
+
+                    note = genanki.Note(
+                        model=model,
+                        fields=[f, b],
+                        guid=genanki.guid_for(digest, i)
+                    )
+
+                    deck.add_note(note)
+
+                package = genanki.Package(deck)
+                package.media_files = list(
+                    dict.fromkeys(paths)
+                )
+
+                output = Path(tmp) / "cards.apkg"
+                package.write_to_file(str(output))
+
+                st.session_state.apkg = (
+                    output.read_bytes()
+                )
+
+        except Exception as error:
+            st.error(f"Erreur d'export : {error}")
+
+    if st.session_state.get("apkg"):
+        st.download_button(
+            "📥 Télécharger le paquet .apkg",
+            data=st.session_state.apkg,
+            file_name="anki_studio_v5.apkg",
+            mime="application/octet-stream"
+        )
+
 st.caption(
-    "V4 expérimentale : les retraits sont déduits "
-    "de la géométrie du texte. La fidélité à 100 % "
-    "n'est pas encore garantie. Les cartes Cloze "
-    "et Occlusion ne sont pas exportables."
+    "Anki Studio V5 — prototype expérimental. "
+    "La hiérarchie est déduite des coordonnées "
+    "du texte dans le PDF."
 )
