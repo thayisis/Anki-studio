@@ -1,25 +1,72 @@
-# Anki Studio V2
+# Anki Studio
 
-Prototype Streamlit gratuit, utilisable depuis Safari sur iPad.
+Application Streamlit gratuite pour convertir des PDF balisés en notes Anki, avec comparaison au document original. Utilisation dans un navigateur, notamment Safari sur iPad ; aucune installation locale n’est nécessaire pour l’utilisateur de l’application hébergée.
 
-## Déploiement sur GitHub
+## Workflow
 
-Remplacez les fichiers `app.py`, `requirements.txt` et `README.md` à la racine de votre dépôt GitHub par ceux de cette archive. Faites **Commit changes**. Streamlit Community Cloud redémarre normalement automatiquement l'application.
+1. Importer un PDF contenant des marqueurs textuels `CARTE`, `CARTE CLOZE` ou `CARTE OCCLUSION` sur des lignes distinctes.
+2. Comparer chaque note au PDF : titre, phrases complètes, retraits, images et ordre. Une note peut couvrir plusieurs pages.
+3. Corriger le titre et les sections parentes en texte simple. Le tableau du verso permet de corriger chaque ligne, sa puce et son retrait sans écrire de HTML. Les images restent en place. « Replacer aussi le titre source au début du verso » permet de récupérer un premier paragraphe pris pour titre.
+4. Valider les notes individuellement. Toute correction annule leur validation et l’ancien téléchargement.
+5. Exporter les notes **validées et compatibles**. Les autres sont listées avec leur motif d’exclusion. Les compteurs distinguent notes, cartes Anki générées et notes en attente.
+6. Télécharger aussi le dossier source ZIP pour conserver le PDF original, toutes les notes (y compris exclues), les coordonnées, les images et les zones PDF.
 
-## Nouveautés
+### Basic et Cloze
 
-- Découpe des sections par marqueurs `CARTE`, `CARTE CLOZE`, `CARTE OCCLUSION`.
-- Aperçu de la **zone du PDF original** correspondant à la carte, même pour les PDF d'une seule page très longue.
-- Prévisualisation recto/verso et édition HTML.
-- Aperçu des images présentes dans les sections.
-- Export `.apkg` avec médias pour les documents ne contenant que des cartes classiques.
-- Blocage de l'export complet si des cartes Cloze ou Occlusion sont présentes.
+Les Basic utilisent les champs natifs `Front` / `Back`. Le titre n’est pas répété dans le contenu du verso (Anki affiche normalement le recto au-dessus de la réponse).
 
-## Limites connues
+Les Cloze utilisent un modèle natif Anki de type Cloze (`Text` / `Extra`, filtre `{{cloze:Text}}`). Le marqueur `CARTE CLOZE` ne précise pas les mots à masquer : l’utilisateur doit saisir `{{c1::texte}}`, `{{c2::autre texte::indice}}`, etc. dans le titre ou une ligne. Les suppressions vides, incomplètes ou imbriquées sont refusées explicitement. Un même numéro produit une seule carte ; plusieurs numéros produisent plusieurs cartes.
 
-- L'indentation est estimée par les positions horizontales et doit être vérifiée.
-- Les images sont ajoutées après le texte, pas nécessairement à leur position exacte.
-- Les clozes et occlusions ne sont pas encore exportables.
-- Le PDF est envoyé au serveur Streamlit lors de l'import, même si aucune API d'IA n'est utilisée.
-- Les PDF très volumineux peuvent dépasser les ressources du service gratuit.
-- Cette V2 est un prototype de test, pas une conversion garantie fidèle.
+L’export ne laisse jamais une Occlusion ou une Cloze incomplète bloquer les Basic validées. Chaque archive produite est contrôlée avant téléchargement : base SQLite, nombre de notes/cartes, types des modèles, noms des champs, rectos/versos, numéros de Cloze et contenu exact des médias.
+
+### Occlusion d’image : limitation explicite
+
+**Aucune Occlusion native n’est générée.** Une image statique n’est pas présentée comme une Occlusion native. Les cartes et leurs images sont détectées, montrées et préservées dans le dossier source, même sans texte.
+
+Le [modèle officiel Anki](https://github.com/ankitects/anki/blob/main/rslib/src/image_occlusion/notetype.rs) utilise un type Cloze spécialisé, l’identification `OriginalStockKind::ImageOcclusion`, des champs Occlusions/Image/Header/BackExtra/Comments, et `anki.imageOcclusion.setup()` pour interpréter des masques. `genanki` ne fournit pas ce contrat natif complet et les marqueurs PDF ne contiennent pas les régions à masquer. Une compatibilité fiable avec les clients Anki n’est donc pas revendiquée.
+
+Workflow sûr : télécharger le ZIP, ouvrir une image de `media/` ou une zone `cards/NNN/source-N.png` dans un client Anki compatible Occlusion native, dessiner les masques et vérifier la carte. Cette étape dépend des fonctions du client Anki ; elle n’est pas automatisée par l’application web. L’application reste gratuite, mais ce document ne promet pas qu’un client iPad particulier propose gratuitement l’édition d’occlusions.
+
+## Extraction et limites
+
+Le moteur est séparé en étapes dans `engine.py` : extraction des caractères/coordonnées/images, détection globale des limites, association des puces séparées, identification prudente des titres, niveaux selon la position horizontale du **texte**, association des images, puis HTML. `exporter.py` gère l’éligibilité, les archives Anki et la sauvegarde des sources.
+
+- Chaque marqueur donne une entrée, même vide ou composée uniquement d’images. Une entrée sans titre nécessite une correction.
+- Le texte extrait n’est ni résumé, ni traduit, ni corrigé. Les caractères `®`, `©`, etc. ne sont plus supprimés. Les glyphes Wingdings reconnus comme puces peuvent être traités comme tels.
+- Les lignes physiques restent distinctes au verso. Une continuation géométriquement probable est marquée dans les données ; on ne fusionne pas des puces successives. Les retraits PDF restent visibles, sans limite à trois niveaux.
+- Seuls des titres avec preuve typographique ou un plan de puces établi par les retraits peuvent donner du contexte ; les phrases précédentes ne sont pas utilisées arbitrairement. Le premier paragraphe et les parents proposés doivent être confirmés. La structure sémantique ne peut pas être garantie automatiquement.
+- Images et schémas vectoriels sont conservés dans l’ordre géométrique, avec leurs transformations et superpositions visibles. Un média très volumineux est limité à 16 mégapixels avec avertissement. Le PDF original est conservé dans le ZIP.
+- Les colonnes, rotations, superpositions et puces isolées sont signalées lorsqu’elles sont détectées. L’ordre géométrique n’est pas une garantie d’ordre sémantique pour tous les documents.
+- Les PDF scannés sans couche texte nécessitent un OCR, non implémenté. Le décodage d’une police PDF incorrecte peut produire des caractères incertains. La comparaison visuelle et le PDF source restent indispensables ; **la fidélité automatique à 100 % n’est pas démontrée**.
+- Le PDF est envoyé au serveur Streamlit lors de l’import. Aucune API d’IA ni service payant n’est utilisé. Les PDF privés de test ne doivent pas être ajoutés au dépôt.
+
+## Développement et tests
+
+Python 3.12 a été utilisé pour cette validation. Depuis le dépôt existant :
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -q
+.venv/bin/python -m streamlit run app.py --server.headless=true
+```
+
+Dans l’environnement cloud préparé, utiliser `/workspace/.venvs/anki-studio/bin/python` à la place de `.venv/bin/python`. Utiliser le checkout existant ; un worktree supplémentaire n’est pas nécessaire.
+
+Les tests synthétiques créent leurs PDF en mémoire : marqueurs vides, image seule, phrase unique, titres enveloppés, pages multiples, page très longue, sept niveaux, puces séparées, symboles, images entre textes, schémas vectoriels, Cloze, intégrité `.apkg`, ZIP source et parcours Streamlit (édition, validation, export partiel, invalidation). L’upload est simulé dans AppTest ; les autres widgets et leurs relances sont exercés. Ce n’est pas un test Safari réel.
+
+Pour vérifier les PDF de cours, les placer dans un dossier privé **hors dépôt**, avec les noms ci-dessous, puis :
+
+```sh
+ANKI_REFERENCE_DIR=/chemin/vers/pdf-prives .venv/bin/python -m pytest -q
+```
+
+| Fichier | Basic | Cloze | Occlusion | Statut de cette validation |
+|---|---:|---:|---:|---|
+| `Anki 2 ANTHROPO .pdf` | 9 | 1 | 1 | Confirmé : 11 marqueurs, 1 image ; 9 Basic exportées dans le test ; Cloze sans suppressions ; Occlusion conservée |
+| `Anki 2 HISTO.pdf` | 16 | 0 | 0 | Confirmé sur la copie compressée : 16 marqueurs, 49 images ; 16 Basic exportées dans le test |
+| `Anki 1 BIO.pdf` | 48 | 3 | 7 | Confirmé sur la copie compressée : 58 marqueurs, 43 images ; 48 Basic exportées dans le test |
+
+Les tests réels comparent d’abord les nombres rapportés aux lignes brutes du PDF, puis vérifient la conservation des éléments et textes, des images et l’export. Ils sont explicitement ignorés si le fichier manque. Les noms du tableau sont les noms canoniques utilisés par les tests ; les copies compressées fournies ont été liées à ces noms dans un dossier privé hors dépôt. La validation porte sur ces copies, sans supposer leur identité visuelle avec les PDF non compressés. Les cartes Glandes exocrines / Mérocrine / Apocrine ont désormais des régressions **sur le PDF réel d’histologie**, en complément des fixtures synthétiques : texte exact, parents, niveaux, retraits, images (0 / 4 / 2) et ordre. Les trois PDF totalisent **85 marqueurs et 93 occurrences d’images**. Les exports de test contiennent 73 Basic ; les quatre Cloze sans suppressions et les huit Occlusions restent exclues explicitement.
+
+Voir [VALIDATION.md](VALIDATION.md) pour les résultats exécutés et les contrôles restant à faire avant déploiement.
