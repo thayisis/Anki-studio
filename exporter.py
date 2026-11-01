@@ -59,7 +59,7 @@ def fields_for(card):
     front = card["front"]
     back = render_blocks(card["blocks"]) if "blocks" in card else card["back"]
     if card["type"] == "CARTE CLOZE":
-        return [front + "<hr>" + back, ""]
+        return [back if card.get("cloze_body_only") else front + "<hr>" + back, ""]
     return [front, back]
 
 

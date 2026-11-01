@@ -54,7 +54,7 @@ def test_official_anki_import(filename, tmp_path):
                 "cloze_words": [
                     (int(n), value)
                     for n, value in re.findall(
-                        r"{{c(\d+)::([A-Za-z]+)}}", fields_for(cards[i])[0]
+                        r"{{c(\d+)::([^{}]+?)}}", fields_for(cards[i])[0]
                     )
                 ],
                 "ords": sorted(n - 1 for n in cloze_numbers(fields_for(cards[i])[0]))

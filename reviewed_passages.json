@@ -1,0 +1,12 @@
+[
+  {"id":"bio-polymer","type":"CARTE","source":"Polymère = assemblage de monomères similaires (ex. amidon)","title":"Polymère"},
+  {"id":"bio-dehydration","type":"CARTE","source":"Déshydratation : assemblage de monomères par élimination d’eau","title":"Déshydratation"},
+  {"id":"bio-hydrolysis","type":"CARTE","source":"hydrolyse : rupture de la liaison par intervention d’eau","title":"hydrolyse"},
+  {"id":"bio-symbiosis","type":"CARTE","source":"Symbiose : association étroite entre deux espèces différentes vivant ensemble pour un bénéfice mutuel","title":"Symbiose"},
+  {"id":"anthro-domestic-nature","type":"CARTE","source":"La « nature domestique » est utilisé comme un artifice réthorique afin de souligner que ce que nous appelons nature peut être représentée dans certaines sociétés comme un élément constitutif de la culture","title":"La « nature domestique »"},
+  {"id":"anthro-beyond-nature-culture","type":"CARTE","source":"Écrit « Par delà nature et culture » —> recherche d’un nouvel universel + développe les 4 types d’ontologie (= manière de voir le monde, manière de penser des êtres, comment se distinguer des ordres « Pq je suis moi et pas qlqun d’autres»)","title":"Par delà nature et culture"},
+  {"id":"bio-energy-cloze","type":"CARTE CLOZE","source":"Systèmes vivants en état de non-équilibre —> nécessite un apport continu d’énergie","title":"Systèmes vivants en état de non-équilibre","deletion":"un apport continu d’énergie"},
+  {"id":"bio-evolution-cloze","type":"CARTE CLOZE","source":"La diversité du vivant résulte des changements évolutifs","title":"La diversité du vivant","deletion":"changements évolutifs"},
+  {"id":"bio-endosymbiosis-cloze","type":"CARTE CLOZE","source":"Théorie de l’endosymbiose pour l’origine des mitochondries et chloroplastes : phagocytose par une cell originel —> explique la double membranaire et l’ADN propre","title":"l’origine des mitochondries et chloroplastes","deletion":"l’endosymbiose"},
+  {"id":"anthro-subcultures-cloze","type":"CARTE CLOZE","source":"La culture n’est pas qu’ethnique, les métiers par exemple crée des sous-cultures (ex : un medecin ne parle pas de la même manière qu’un lambda)","title":"La culture","deletion":"sous-cultures"}
+]

@@ -1,6 +1,7 @@
 """Streamlit AppTest exercises reruns; uploaded PDF bytes replace unsupported upload widget."""
 
 import io
+import pytest
 from unittest.mock import patch
 from pathlib import Path
 
@@ -102,3 +103,37 @@ def test_ui_title_recovery_is_once_only_after_repeated_saves():
         button(at, "Enregistrer les corrections").click().run()
         assert not at.exception
         assert at.session_state["edits"][0]["blocks"] == before
+
+
+@pytest.mark.parametrize(
+    "index,kind,expected_title",
+    [
+        (15, "CARTE", "Polymère"),
+        (4, "CARTE CLOZE", "Systèmes vivants en état de non-équilibre"),
+    ],
+)
+def test_real_reviewed_basic_and_cloze_can_be_validated_and_exported(
+    index, kind, expected_title
+):
+    import os
+
+    path = (
+        Path(os.environ.get("ANKI_REFERENCE_DIR", "tests/private-pdfs"))
+        / "Anki 1 BIO.pdf"
+    )
+    if not path.exists():
+        pytest.skip("Private biology PDF unavailable")
+    f = io.BytesIO(path.read_bytes())
+    f.name = "Biologie.pdf"
+    with patch("streamlit.file_uploader", return_value=f):
+        at = AppTest.from_file(
+            Path(__file__).resolve().parents[1] / "app.py", default_timeout=15
+        ).run()
+        at.selectbox[0].select(index).run()
+        assert not at.exception
+        assert at.text_area[0].value == expected_title
+        assert at.checkbox[0].disabled  # Source already restored exactly once.
+        at.checkbox[-1].check().run()
+        button(at, "Préparer le paquet .apkg").click().run()
+        assert not at.exception and at.session_state["apkg"][:2] == b"PK"
+        assert not at.error

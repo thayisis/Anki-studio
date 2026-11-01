@@ -17,7 +17,9 @@ from engine import (
     restore_source_title,
     update_edited_levels,
 )
-from exporter import build_apkg, export_plan, export_reason, source_bundle
+from exporter import build_apkg, export_plan, export_reason, source_bundle, fields_for
+from exporter import cloze_numbers
+from cloze_preview import preview_cloze
 
 st.set_page_config(page_title="Anki Studio", page_icon="📚", layout="wide")
 st.title("📚 Anki Studio")
@@ -110,6 +112,20 @@ with right:
         if side == "Recto"
         else preview_html(render_blocks(card["blocks"]), card["media"])
     )
+    if card["type"] == "CARTE CLOZE":
+        numbers = sorted(cloze_numbers(fields_for(card)[0]))
+        active = (
+            st.selectbox("Suppression Cloze", numbers, key="cloze_" + prefix)
+            if len(numbers) > 1
+            else numbers[0]
+            if numbers
+            else 1
+        )
+        content = preview_cloze(
+            preview_html(fields_for(card)[0], card["media"]),
+            answer=side == "Verso",
+            active_number=active,
+        )
     components.html(
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         '<div style="font:18px/1.5 sans-serif;white-space:pre-wrap;overflow-wrap:anywhere">'
@@ -200,6 +216,17 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
                 restore_source_title(updated, st.session_state.cards[index]["title"])
             updated["levels"] = update_edited_levels(updated["blocks"])
             updated["back"] = render_blocks(updated["blocks"])
+            if (
+                updated.get("proposed_deletion")
+                and "{{c1::" + updated["proposed_deletion"] + "}}"
+                not in updated["back"]
+            ):
+                updated["warnings"] = [
+                    w
+                    for w in updated["warnings"]
+                    if not w.startswith("Cible Cloze proposée")
+                ]
+                updated.pop("proposed_deletion", None)
             st.session_state.edits[index] = updated
             st.session_state.revisions[index] = revision + 1
             validated.discard(index)
@@ -246,8 +273,8 @@ if plan["excluded"]:
     )
 st.caption(
     "Export partiel : seules les notes validées et compatibles sont incluses. "
-    "Une note Cloze peut produire plusieurs cartes. L’Occlusion native est conservée dans le dossier source, "
-    "sans création automatique de masques."
+    "Une note Cloze peut produire plusieurs cartes. Les cartes Occlusion restent dans le dossier source ; "
+    "leur export natif et l’éditeur de masques ne sont pas encore intégrés."
 )
 if st.button("Préparer le paquet .apkg", disabled=not plan["included"]):
     try:

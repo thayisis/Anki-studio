@@ -6,7 +6,7 @@ La branche a été revue sans fusion et sans déploiement. **L’ancien bilan «
 
 | Priorité | Module | Défaut avant revue | Correction / preuve |
 |---|---|---|---|
-| Haute | `exporter.py` | Six Basic avec verso vide passaient dans l’export après validation. | Exclusion explicite même après validation ; source conservée et récupération possible dans l’éditeur. Tests réels : Bio 16/17/18/54, Anthropo 7/8. |
+| Haute | `exporter.py` | Six Basic avec verso vide passaient dans l’export après validation. | Protection générique par exclusion des versos vides ; les six passages sont maintenant répartis explicitement et intégralement depuis les PDF (voir CARD_CORRECTIONS.md). Tests réels : Bio 16/17/18/54, Anthropo 7/8. |
 | Haute | `engine.py` | Le plan d’alinéas pouvait reprendre un long paragraphe précédent comme parent de titres d’anthropologie. | Les paragraphes enveloppés ne deviennent plus des labels de section sans preuve typographique. Tests sur toutes les cartes concernées et fixture synthétique ; contexte Descola maintenu. |
 | Moyenne | `engine.py` | Le chiffre plus petit de O2 devenait de taille normale : la comparaison du texte seul masquait cette différence scientifique. | Conservation des tailles et décalages des fragments PDF dans le HTML ; caractères inchangés. Test sur la carte Protéines du PDF de biologie et fixture synthétique. Si une ligne est éditée, les anciens fragments ne remplacent jamais le nouveau texte. |
 | Moyenne | `engine.py` | Les mappings Unicode de Wingdings pouvaient afficher ®, § ou } comme puces au lieu de leur forme imprimée. | Normalisation des seules puces en •, numérotation conservée, vrais symboles dans le texte inchangés. |
@@ -18,11 +18,11 @@ La branche a été revue sans fusion et sans déploiement. **L’ancien bilan «
 - Les trois PDF, 85 marqueurs et 93 occurrences d’images ; aucun cours privé ajouté au dépôt.
 - 556 lignes textuelles non vides : décodage Poppler indépendant, mots et ponctuation comparés au HTML, vérification d’absence de mots non représentés, retraits mesurés et ordre des médias rendu.
 - Cartes réelles Glandes exocrines / Mérocrine / Apocrine, avec texte exact et contexte ; transition Morphologie ; cas d’anthropologie où le parent était un paragraphe.
-- Import réel de 67 Basic dans trois collections temporaires Anki ; import d’un Cloze synthétique à deux cartes ; champs et médias contrôlés, questions/réponses rendues par Anki. Aucun appel à un service payant.
+- Depuis la correction des dix passages : import réel de 73 Basic et 4 Cloze dans trois collections temporaires Anki ; import d’un Cloze synthétique à deux cartes et aller-retour d’une Occlusion native synthétique ; champs et médias contrôlés, questions/réponses rendues par Anki. Aucun appel à un service payant.
 - Relecture de l’interface, dépendances, documentation, exclusions Git et CI : le job natif Anki est isolé ; aucune étape de déploiement. Les tests privés restent explicitement ignorés quand les PDF sont absents, sans être décrits comme vérifiés.
 
 ## Décision
 
-**Ne pas considérer cette revue comme une autorisation de fusionner ou déployer.** Les défauts confirmés ont été corrigés et les résultats de test renforcés. Il reste six Basic à répartir manuellement entre titre et verso, quatre Cloze à annoter et huit Occlusions non exportées nativement. La validation Safari iPad, les petites légendes dans les images et la revue sémantique exhaustive des titres ne sont pas démontrées.
+**Ne pas considérer cette revue comme une autorisation de fusionner ou déployer.** Les défauts confirmés ont été corrigés et les résultats de test renforcés. Les six Basic et les quatre Cloze sont maintenant résolues sur les passages fournis : voir [CARD_CORRECTIONS.md](CARD_CORRECTIONS.md). Les huit Occlusions du cours ne sont pas encore exportées nativement ; une preuve d’aller-retour natif synthétique a été ajoutée, détaillée dans [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md). La validation Safari iPad, les petites légendes dans les images et la revue sémantique exhaustive des titres ne sont pas démontrées.
 
 Voir [VALIDATION.md](VALIDATION.md) pour les commandes, résultats et limites précises.

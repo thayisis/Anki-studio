@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from engine import MARKER, parse_pdf
+from reviewed_notes import without_cloze
 from test_review_regressions import BodyText
 
 PDF_NAMES = ["Anki 2 HISTO.pdf", "Anki 1 BIO.pdf", "Anki 2 ANTHROPO .pdf"]
@@ -136,7 +137,8 @@ def test_poppler_word_order_punctuation_indentation_and_rendered_images(filename
         rendered.feed(card["back"])
         # Context repeats source ancestors intentionally; audit only this card's
         # own heading and back to avoid hiding lost content behind duplicates.
-        actual = tokens(card["title"] + "\n" + "".join(rendered.fragments))
+        own_title = "" if card.get("source_partitioned") else card["title"] + "\n"
+        actual = tokens(without_cloze(own_title + "".join(rendered.fragments)))
         assert actual == expected, (filename, card["id"], actual, expected)
         image_blocks = [b for b in card["blocks"] if b["kind"] == "image"]
         assert rendered.images == [b["media_name"] for b in image_blocks]

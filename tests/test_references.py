@@ -15,6 +15,7 @@ import pytest
 
 from engine import MARKER, extract_elements, parse_pdf
 from exporter import build_apkg
+from reviewed_notes import without_cloze
 
 REFERENCE_DIR = Path(os.environ.get("ANKI_REFERENCE_DIR", "tests/private-pdfs"))
 
@@ -121,14 +122,14 @@ def test_reference_marker_counts_and_no_text_loss(filename, expected):
             if e["kind"] != "text" or not e["text"]:
                 continue
             assert e["text"] in c["title"] or any(
-                e["text"] == b.get("text") for b in c["blocks"]
+                e["text"] == without_cloze(b.get("text", "")) for b in c["blocks"]
             )
     payload, plan = build_apkg(
         cards, set(range(len(cards))), path.stem, hashlib.sha256(data).hexdigest()
     )
     assert (
         plan["notes"]
-        == {"Anki 2 HISTO.pdf": 16, "Anki 1 BIO.pdf": 44, "Anki 2 ANTHROPO .pdf": 7}[
+        == {"Anki 2 HISTO.pdf": 16, "Anki 1 BIO.pdf": 51, "Anki 2 ANTHROPO .pdf": 10}[
             filename
         ]
     )
@@ -144,12 +145,12 @@ def test_reference_marker_counts_and_no_text_loss(filename, expected):
         empty_answers
         == {
             "Anki 2 HISTO.pdf": set(),
-            "Anki 1 BIO.pdf": {16, 17, 18, 54},
-            "Anki 2 ANTHROPO .pdf": {7, 8},
+            "Anki 1 BIO.pdf": set(),
+            "Anki 2 ANTHROPO .pdf": set(),
         }[filename]
     )
     if "ANTHROPO" in filename:
-        assert plan["notes"] == 7 and plan["cards"] == 7
+        assert plan["notes"] == 10 and plan["cards"] == 10
         assert cards[8]["type"] == "CARTE OCCLUSION" and len(cards[8]["media"]) == 1
         assert all(cards[i]["context"] == ["Descola"] for i in (3, 4, 5, 6, 7, 9, 10))
         assert (

@@ -14,6 +14,8 @@ import re
 
 import pymupdf as fitz
 
+from reviewed_notes import recipe_for
+
 MARKER = re.compile(r"^CARTE(?:\s+(CLOZE|OCCLUSION))?$", re.I)
 BULLETS = set("•●○◦▪▫□■◆◇◊–−-·§")
 BULLET_PREFIX = re.compile(r"^(?:[•●○◦▪▫□■◆◇◊–−\-·§]|\d+[.)])(?:\s+|$)")
@@ -590,7 +592,72 @@ def parse_pdf(data):
                     + [e["bullet_source"] for e in title_lines if "bullet_source" in e],
                 )
             )
+    for card in cards:
+        apply_reviewed_partition(card)
     return cards
+
+
+def apply_reviewed_partition(card):
+    """Resolve only the ten exact passages reviewed against the supplied PDFs."""
+    if card["blocks"]:
+        return
+    recipe = recipe_for(card["type"], card["title"])
+    if recipe is None:
+        return
+    body = reconstruct_lines(card["source_elements"])
+    source_title = card["title"]
+    if recipe["title"] not in source_title:
+        card["warnings"].append(
+            "Passage reconnu, mais titre coupé différemment : répartition à confirmer dans l’éditeur."
+        )
+        return
+    deletion = recipe.get("deletion")
+    if deletion:
+        matches = [b for b in body if b["kind"] == "text" and deletion in b["text"]]
+        if len(matches) != 1 or matches[0]["text"].count(deletion) != 1:
+            card["warnings"].append(
+                "Passage reconnu, mais suppression ambiguë ou coupée : annoter dans l’éditeur."
+            )
+            return
+        b = matches[0]
+        b["text"] = b["text"].replace(deletion, "{{c1::" + deletion + "}}", 1)
+    card["title"] = recipe["title"]
+    card["title_html"] = html.escape(recipe["title"])
+    card["front"] = (
+        html.escape(" — ".join(card["context"])) + " — " if card["context"] else ""
+    ) + card["title_html"]
+    card["source_title"] = source_title
+    card["source_title_restored"] = True
+    card["source_partitioned"] = True
+    card["title_source_ids"] = []
+    card["reviewed_recipe"] = recipe["id"]
+    card["blocks"] = body
+    card["levels"] = assign_indentation(body)
+    card["back"] = render_blocks(body)
+    card["warnings"] = [
+        w
+        for w in card["warnings"]
+        if not w.startswith(
+            (
+                "Aucun verso distinct",
+                "Cloze : ajouter",
+                "Premier paragraphe",
+                "Titre issu d’un paragraphe",
+            )
+        )
+    ]
+    if deletion:
+        card["cloze_body_only"] = True
+        card["proposed_deletion"] = deletion
+        card["warnings"].append(
+            "Cible Cloze proposée depuis le texte original : "
+            + deletion
+            + ". À confirmer avant validation."
+        )
+    else:
+        card["warnings"].append(
+            "Recto extrait littéralement du passage ; le texte source intégral est conservé au verso. À vérifier avant validation."
+        )
 
 
 def restore_source_title(card, source_title):
