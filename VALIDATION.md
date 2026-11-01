@@ -4,7 +4,7 @@ Branche : `fix/pdf-conversion`. Aucune fusion et aucun déploiement. La revue d�
 
 ## Résultats réellement exécutés
 
-**101 tests réussis, aucun échec, aucun test ignoré**, avec les trois PDF et l’interpréteur Anki officiel activés :
+**115 tests réussis, aucun échec, aucun test ignoré**, avec les trois PDF et l’interpréteur Anki officiel activés :
 
 ```sh
 ANKI_REFERENCE_DIR=/workspace/.anki-studio/reference-pdfs \
@@ -14,14 +14,14 @@ ANKI_REFERENCE_DIR=/workspace/.anki-studio/reference-pdfs \
 
 Le dossier privé contient l’anthropologie fournie et des liens vers les copies compressées de biologie et d’histologie, sous leurs noms canoniques. Aucun PDF ni paquet de cours n’est ajouté au dépôt.
 
-| Document testé | Basic détectées | Cloze | Occlusion | Total | Images (occurrences) | Notes exportées (Basic + Cloze) |
+| Document testé | Basic | Cloze | Occlusion | Total | Images source | Notes exportées dans le test complet |
 |---|---:|---:|---:|---:|---:|---:|
-| Anthropologie | 9 | 1 | 1 | 11 | 1 | 10 |
+| Anthropologie | 9 | 1 | 1 | 11 | 1 | 11 |
 | Histologie compressée | 16 | 0 | 0 | 16 | 49 | 16 |
-| Biologie compressée | 48 | 3 | 7 | 58 | 43 | 51 |
-| Total | 73 | 4 | 8 | 85 | 93 | 77 |
+| Biologie compressée | 48 | 3 | 7 | 58 | 43 | 58 |
+| Total | 73 | 4 | 8 | 85 | 93 | 85 |
 
-Les nombres de marqueurs sont confirmés indépendamment sur les PDF. Le marquage des notes comme « validées » est simulé **dans les tests uniquement** ; ce n’est pas une validation pédagogique.
+Les nombres de marqueurs sont confirmés indépendamment sur les PDF. Le marquage des notes comme « validées » et les rectangles attribués aux huit Occlusions sont simulés **dans les tests uniquement**. Chaque Occlusion réelle est d’abord vérifiée vierge de masques ; le test lui ajoute un rectangle géométrique de contrôle, sans proposer de cible pédagogique. Aucun de ces rectangles n’est préchargé dans l’application.
 
 ### Texte et ponctuation
 
@@ -41,11 +41,11 @@ Des zones source ont aussi été inspectées visuellement, notamment Apocrine, P
 
 ### Export et interface
 
-Le moteur officiel **Anki 26.9.3**, installé dans un environnement séparé, importe réellement les trois paquets corrigés : Histologie 16 Basic ; Biologie 48 Basic + 3 Cloze ; Anthropologie 9 Basic + 1 Cloze, soit 77 notes/cartes. Un paquet synthétique Cloze (1 note donnant 2 cartes) est aussi vérifié. Les tests vérifient les champs, numéros, médias et le rendu recto/verso via Anki ; les réponses masquées du Cloze sont absentes du texte visible de la question et présentes dans la réponse.
+Le moteur officiel **Anki 26.9.3** importe les trois paquets complets : Histologie 16 Basic ; Biologie 48 Basic + 3 Cloze + 7 Occlusions ; Anthropologie 9 Basic + 1 Cloze + 1 Occlusion, soit 85 notes/cartes avec un rectangle de contrôle par Occlusion. Les 73 Basic et 4 Cloze restent aussi testées par leur chemin d’export précédent, sans Occlusion validée. Un paquet synthétique Cloze (1 note donnant 2 cartes) est aussi vérifié. Les tests vérifient les champs, numéros, médias et le rendu recto/verso via Anki ; les réponses masquées du Cloze sont absentes du texte visible de la question et présentes dans la réponse.
 
 Les contrôles SQLite, modèles (question **et réponse**), champs, archives et médias de l’application passent. Les tests Streamlit vérifient l’édition, les changements de carte, la validation, l’export partiel, l’invalidation des téléchargements, la récupération unique du titre source et les parcours d’export sur la Basic Polymère et la Cloze énergie du PDF réel. Les aperçus masquent/révèlent la suppression active. `pip check`, Ruff (`F,E9`) et `git diff --check` passent.
 
-Le serveur Streamlit avait été démarré et sa santé HTTP vérifiée pendant la préparation précédente. La revue courante ajoute les parcours AppTest ; elle ne prétend pas avoir redémarré ou déployé le site public.
+Un serveur Streamlit uniquement local est démarré automatiquement par les tests navigateur : import PDF, dessin, aperçu, validation par numéro, validation de note, téléchargement ZIP intègre, puis invalidation de l’export après une modification. Le changement de carte préserve les zones et validations ; une nouvelle note reste vierge. Le site public n’est ni modifié ni déployé.
 
 ## Dix passages résolus
 
@@ -55,11 +55,17 @@ Les quatre Cloze utilisent chacune `c1` : **un apport continu d’énergie**, **
 
 Voir [CARD_CORRECTIONS.md](CARD_CORRECTIONS.md) pour les rectos et cibles exacts. Les transformations sont aussi exercées sur des PDF synthétiques Unicode en CI.
 
-## Occlusion native : étude validée, intégration ouverte
+## Occlusion native : intégration vérifiée
 
-Les huit schémas ont été inspectés. Ils ne définissent pas les rectangles à masquer. Le prototype natif a créé 1 note synthétique, 2 masques et 2 cartes ; il les a exportés puis réimportés dans une autre collection Anki, avec vérification du stock natif `originalStockKind=6`, des formes actives/inactives, des coordonnées, du média inchangé et des templates `anki.imageOcclusion.setup()`.
+L’éditeur web et le chemin d’export natif sont maintenant intégrés. Aucune zone n’est créée automatiquement. Les zones sont dessinées, déplacées et redimensionnées à la main, en coordonnées normalisées liées au hash du canevas. Chacune des cartes générées doit être prévisualisée puis explicitement validée. Tout changement annule la validation et le téléchargement, y compris pendant un déplacement avant relâchement du pointeur.
 
-**7 tests d’étude passent** (6 entrées invalides refusées et 1 aller-retour natif). Aucune image avec masques dessinés définitivement n’est substituée à une Occlusion native. Le prototype ne participe pas à l’export courant de l’application. L’éditeur de zones, la validation des cibles des huit notes et le chemin d’export natif côté application restent à développer : [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md).
+Les huit notes réelles ont été exportées/importées par le moteur officiel avec des masques de contrôle. Le test **modifie ensuite le masque de chacune des huit notes via `update_image_occlusion_note()` après import**, tout en vérifiant que l’image reste identique. Le modèle porte `originalStockKind=6`, les champs natifs tagués et les templates officiels. Les masques demeurent des formes distinctes : aucune image aplatie n’est substituée.
+
+Les deux images de Biologie 15 sont composées selon leurs placements PDF ; leurs fichiers extraits originaux sont aussi conservés et contrôlés dans le paquet. Le backend s’exécute dans un processus Anki isolé par export et vérifie l’archive par réimport avant de la proposer au téléchargement. Les événements répétés/périmés, le rapprochement commit/aperçu, les coordonnées invalides, les validations partielles et les groupes de rectangles sont testés.
+
+Les tests navigateur Chromium exécutent réellement les gestes tactiles émulés de dessin, déplacement, redimensionnement et défilement, ainsi que zoom, changement de largeur, événements de stylet synthétiques, annulation/rétablissement, regroupement et suppression. Les interactions sont aussi vérifiées au travers du vrai composant dans Streamlit. La hauteur de l’iframe est bornée par son contenu, sans boucle de croissance lors des redimensionnements.
+
+Voir [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md) pour les étapes d’utilisation et les limites matérielles.
 
 ## Non vérifié / non garanti
 
@@ -68,7 +74,9 @@ Les huit schémas ont été inspectés. Ils ne définissent pas les rectangles �
 - Reconnaissance des mots inscrits dans les pixels des images, ni lisibilité parfaite de toutes les petites annotations après compression.
 - Identité visuelle des copies compressées avec les deux fichiers initiaux trop volumineux.
 - Justesse sémantique automatique de tous les titres parents : elle reste à confirmer visuellement ; ni les comptages ni le second lecteur ne la prouvent.
-- Masquage et exécution graphique JavaScript des huit Occlusions sur Safari / Anki : seul le prototype natif headless synthétique a été éprouvé.
+- Exécution graphique du canevas natif dans le client Anki cible : import, édition des formes et HTML natif vérifiés par le moteur officiel ; pas de client Anki graphique exécuté.
+- Apple Pencil physique : événements de stylet synthétiques seulement. Le toucher est émulé dans Chromium ; rejet de paume, interruptions iPadOS et Safari réel non vérifiés.
+- Hébergeur final : la nouvelle dépendance `anki==26.9.3` a été installée/testée ici (Linux manylinux_2_35, glibc ≥ 2.35), pas sur le site public.
 - Résultats de la nouvelle CI distante : les commandes passent localement ; les PDF privés ne sont pas dans GitHub.
 
-Versions locales : Python 3.12.14, Streamlit 1.66.1, PyMuPDF 1.28.2, genanki 0.13.1, Anki 26.9.3. La suite précédente de 45 tests et ses exports de 73 Basic étaient insuffisants pour conclure à des cartes utilisables : six réponses vides y passaient. La revue suivante avait exclu ces six Basic et n’exportait que 67 notes. Les dix passages sont désormais résolus : les résultats actuels de 77 notes supportées remplacent ces deux états antérieurs. Le projet reste ouvert sur les huit Occlusions natives et la validation Safari iPad.
+Versions locales : Python 3.12.14, Streamlit 1.66.1, PyMuPDF 1.28.2, genanki 0.13.1, Anki 26.9.3. La suite précédente de 45 tests et ses exports de 73 Basic étaient insuffisants pour conclure à des cartes utilisables : six réponses vides y passaient. La revue suivante avait exclu ces six Basic et n’exportait que 67 notes. Les dix passages sont désormais résolus : les 77 notes Basic/Cloze ont été rétablies, puis l’intégration Occlusion porte le test complet à 85 notes après annotation et validation explicites. L’éditeur et les huit Occlusions natives sont maintenant intégrés ; la validation physique Safari iPad / Pencil reste ouverte. Les rectangles pédagogiques réels restent à dessiner et vérifier par l’utilisateur, sans préremplissage automatique.

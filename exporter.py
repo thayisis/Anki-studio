@@ -65,7 +65,9 @@ def fields_for(card):
 
 def export_reason(card):
     if card["type"] == "CARTE OCCLUSION":
-        return "Occlusion native non prise en charge ; source conservée."
+        from occlusion import export_issue
+
+        return export_issue(card)
     if card["type"] not in ("CARTE", "CARTE CLOZE"):
         return "Type inconnu."
     if not html.unescape(re.sub("<[^>]+>", "", card["front"])).strip():
@@ -111,7 +113,9 @@ def export_plan(cards, validated):
         awaiting=sum(i not in validated for i in range(len(cards))),
         notes=len(included),
         cards=sum(
-            len(cloze_numbers(fields_for(cards[i])[0]))
+            len({m["number"] for m in cards[i]["io"]["masks"]})
+            if cards[i]["type"] == "CARTE OCCLUSION"
+            else len(cloze_numbers(fields_for(cards[i])[0]))
             if cards[i]["type"] == "CARTE CLOZE"
             else 1
             for i in included
@@ -120,6 +124,17 @@ def export_plan(cards, validated):
 
 
 def build_apkg(cards, validated, deck_name, document_digest):
+    plan = export_plan(cards, validated)
+    if any(cards[i]["type"] == "CARTE OCCLUSION" for i in plan["included"]):
+        from native_export import build_native_apkg
+
+        return build_native_apkg(
+            cards, plan, deck_name, document_digest, _build_legacy_apkg
+        )
+    return _build_legacy_apkg(cards, validated, deck_name, document_digest)
+
+
+def _build_legacy_apkg(cards, validated, deck_name, document_digest):
     plan = export_plan(cards, validated)
     if not plan["included"]:
         raise ValueError("Aucune note validée et exportable.")
@@ -243,11 +258,12 @@ def source_bundle(data, cards, validated):
         archive.writestr(
             "LIRE-MOI.txt",
             "Ce ZIP est un dossier source, pas un paquet Anki. Toutes les cartes sont conservées.\n"
-            "Occlusion : ouvrir une image media/ ou cards/NNN/source-N.png dans un client Anki "
+            "Les masques validés figurent dans cards.json ; les images restent non masquées. "
+            "Occlusion : l’éditeur web permet le dessin puis l’export natif. Ouvrir une image dans un client Anki "
             "compatible Occlusion d’image native (Anki 23.10+ ou client compatible), créer les "
-            "masques manuellement et vérifier le résultat. Ce convertisseur ne crée aucun masque.\n"
+            "masques manuellement et vérifier le résultat. Aucune zone n’est créée automatiquement ; dessiner et valider les zones dans l’éditeur.\n"
             "L’application reste gratuite et utilisable dans Safari sans installation. La création "
-            "manuelle d’occlusions dépend des fonctions du client Anki ; elle n’est pas réalisable "
-            "automatiquement par cette application. Le PDF original reste dans source.pdf.\n",
+            "manuelle d’occlusions peut se faire dans l’éditeur web ; les masques natifs restent éditables "
+            "après import dans un client Anki compatible. Le PDF original reste dans source.pdf.\n",
         )
     return output.getvalue()

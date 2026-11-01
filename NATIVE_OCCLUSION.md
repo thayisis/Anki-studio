@@ -1,60 +1,63 @@
-# Étude des huit Occlusions natives
+# Image Occlusion native — éditeur et export intégrés
 
-## Conclusion technique
+Les huit notes Occlusion des PDF sont maintenant prises en charge par l’éditeur web et le modèle natif officiel Anki. **Aucune zone n’est prédéfinie** dans le code des cours : l’utilisateur dessine les rectangles et valide chaque carte générée.
 
-L’export réellement natif est **faisable avec le moteur officiel Anki**. Un prototype synthétique crée une note Image Occlusion, deux masques rectangulaires, deux cartes, exporte le paquet et le réimporte dans une autre collection. Les masques restent structurés et éditables ; ils ne sont jamais dessinés définitivement dans une image.
+## Utilisation dans le navigateur
 
-Cette preuve ne signifie pas que les huit Occlusions du cours sont intégrées à l’application. L’export actuel des cours inclut Basic et Cloze seulement ; le ZIP conserve les huit notes Occlusion et leurs images. Le projet reste ouvert sur cette intégration.
+1. Sélectionner une note Occlusion. L’éditeur montre l’image source non masquée. Le titre est facultatif si le PDF ne contient qu’une image.
+2. Utiliser **Dessiner**, puis faire glisser le doigt, le Pencil ou la souris. Utiliser **Déplacer / redimensionner** et les poignées pour ajuster les rectangles. Annuler/rétablir, supprimer une zone et effacer toutes les zones sont disponibles.
+3. Utiliser **Défiler** et le zoom pour naviguer dans une grande image. Les coordonnées sont normalisées sur l’image, indépendamment du zoom, de la largeur du navigateur et de l’orientation.
+4. Choisir le numéro de carte Anki d’un rectangle. Plusieurs rectangles de même numéro forment une carte ; des numéros différents donnent plusieurs cartes.
+5. Afficher **Aperçu masqué** pour chaque numéro, puis vérifier sa case de validation sous l’éditeur. **Révéler** et **Image seule** montrent les réponses et la source intacte.
+6. Valider la fidélité de la note puis préparer le `.apkg`. Une carte non prévisualisée ou non validée ne peut pas être exportée. Toute modification des rectangles, de leurs numéros ou du contenu annule la validation et l’ancien téléchargement.
 
-## Huit schémas examinés visuellement
+Le composant est local, sans bibliothèque JavaScript chargée depuis un tiers. Il utilise SVG et Pointer Events, avec capture du pointeur et gestion de `pointercancel`. La vue de défilement évite de dessiner pendant la navigation. Limites : 500 rectangles et 99 numéros par note ; tailles minimales de 8 pixels à l’écran (zoomer pour les petites légendes).
 
-| PDF / nº | Contenu visible dans l’image | Images source | Décisions de masquage à présenter dans un éditeur |
-|---|---|---:|---|
-| Biologie 7 | Classification du vivant | 1 | Noms des domaines/règnes, codes, ou les deux ; définir une carte par cible ou un groupe. |
-| Biologie 15 | Tableaux des groupes fonctionnels | 2 | Choisir entre noms, structures et propriétés ; composer un canevas commun aux deux images sans perdre leur ordre. |
-| Biologie 19 | Tableau des quatre groupes de macromolécules | 1 | Choisir les cellules à masquer, sans cacher en même temps tous les indices utiles. |
-| Biologie 31 | Quelques exemples d’acides aminés | 1 | Noms et abréviations, structures, ou classification de polarité ; conserver les annotations manuscrites. |
-| Biologie 32 | Les vingt acides aminés | 1 | Lettre, abréviation, nom et caractère essentiel : plusieurs exercices possibles à distinguer. |
-| Biologie 50 | Le transport de protéines | 1 | Légendes du schéma ou étapes du texte ; préserver les deux parties visibles. |
-| Biologie 52 | Maladie de Tay-Sachs | 1 | Titre ou éléments du texte clinique ; aucun diagnostic supplémentaire n’est généré. |
-| Anthropologie 9 | Tableau Totémisme / Naturalisme / Animisme / Analogisme | 1 | Noms des quatre cases, intitulés des axes, ou exercice combiné. |
+## Images conservées
 
-Ce sont des possibilités d’exercice, pas des masques présentés comme déjà validés. Les fichiers ne contiennent ni rectangles de masquage ni annotations PDF indiquant les réponses à cacher. Quatre notes n’ont pas de titre textuel en dehors du bitmap. Ces données et les légendes sont conservées dans les sources.
+| PDF / nº | Contenu | Images source |
+|---|---|---:|
+| Biologie 7 | Classification du vivant | 1 |
+| Biologie 15 | Groupes fonctionnels | 2 |
+| Biologie 19 | Quatre groupes de macromolécules | 1 |
+| Biologie 31 | Exemples d’acides aminés | 1 |
+| Biologie 32 | Vingt acides aminés | 1 |
+| Biologie 50 | Transport de protéines | 1 |
+| Biologie 52 | Maladie de Tay-Sachs | 1 |
+| Anthropologie 9 | Totémisme / Naturalisme / Animisme / Analogisme | 1 |
 
-## Contrat natif vérifié
+Les images extraites non masquées restent inchangées. Une image unique est réutilisée byte pour byte comme base native. Pour Biologie 15, un canevas non masqué compose les deux images selon leurs positions et leur espacement PDF ; les deux fichiers extraits originaux sont aussi conservés dans le paquet et accessibles dans un volet du verso. Les masques restent des formes séparées : aucun rectangle n’est peint dans les pixels.
 
-Références officielles examinées :
+Le PDF original, les images et le manifeste des masques sont conservés dans le ZIP source. Les coordonnées sont liées au hash du canevas ; une image modifiée ne peut pas réutiliser une validation précédente. La composition multi-image actuelle concerne une page PDF ; une note Occlusion à images réparties sur plusieurs pages est conservée avec avertissement et n’est pas exportée automatiquement.
 
-- [Modèle Image Occlusion](https://github.com/ankitects/anki/blob/main/rslib/src/image_occlusion/notetype.rs)
-- [Parseur des formes et propriétés](https://github.com/ankitects/anki/blob/main/rslib/src/image_occlusion/imageocclusion.rs)
+## Export réellement natif
 
-Le prototype appelle `Collection.add_image_occlusion_notetype()` et `add_image_occlusion_note()` :
+Quand la sélection inclut une Occlusion, `native_export.py` prépare les données et lance un **processus Anki isolé par export**. Il importe les Basic/Cloze du chemin existant, puis crée les notes via `Collection.add_image_occlusion_note()` avec le modèle officiel :
 
-- modèle de type Cloze **avec `originalStockKind == 6`** ; un Cloze générique ne suffit pas ;
-- champs natifs Occlusion, Image, Header, Back Extra, Comments et tags de champs natifs ;
-- masques dans Occlusion, par exemple `{{c1::image-occlusion:rect:left=0.1:top=0.1:width=0.3:height=0.2:oi=1}}` ;
-- une image de base intacte et des masques séparés ; mêmes numéros regroupant plusieurs formes, numéros différents produisant différentes cartes ;
-- templates natifs avec `anki.imageOcclusion.setup()` et `image-occlusion-canvas`.
+- type Cloze et **`originalStockKind == 6`** ;
+- champs/tag natifs Occlusion, Image, Header, Back Extra, Comments ;
+- formes `{{c1::image-occlusion:rect:left=…:top=…:width=…:height=…:oi=1}}` ;
+- templates `anki.imageOcclusion.setup()` et `image-occlusion-canvas`.
 
-`native_io.py` étudie seulement la sérialisation rectangulaire : coordonnées normalisées bornées dans l’image, valeurs finies, surface positive, numéros 1–99. Les masques vides ou invalides sont refusés, jamais transformés en notes Basic de substitution.
+L’archive est exportée par Anki, réimportée dans une autre collection et vérifiée avant téléchargement : nombres de notes/cartes, GUID, champs Basic/Cloze, type natif, coordonnées et groupes de masques, image et médias par SHA-256. Le réimport du même paquet est testé sans duplication. Le vérificateur ne suppose pas qu’une archive native moderne a la structure SQLite legacy de `genanki`.
 
-## Test exécuté
+Si seules des Basic/Cloze sont incluses, leur chemin d’export précédent reste disponible. Aucun échec natif ne déclenche un remplacement silencieux par une image ou une note Basic.
 
-```sh
-ANKI_TEST_PYTHON=/workspace/.venvs/anki-import-check/bin/python \
-  /workspace/.venvs/anki-studio/bin/python -m pytest tests/test_native_occlusion.py -q
-```
+Références officielles : [modèle](https://github.com/ankitects/anki/blob/main/rslib/src/image_occlusion/notetype.rs), [formes et propriétés](https://github.com/ankitects/anki/blob/main/rslib/src/image_occlusion/imageocclusion.rs).
 
-**7 tests passent** : six refus d’entrées invalides et un aller-retour natif. Celui-ci vérifie la collection exportée puis réimportée : 1 note, 2 cartes, 2 masques, stock natif, coordonnées des formes, média inchangé par SHA-256, formes active/inactive et templates natifs. L’essai utilise une image synthétique, pas un schéma du cours.
+## Vérifications exécutées
 
-## Intégration restant à développer
+- Les huit notes réelles sont d’abord vérifiées **sans aucun masque initial**.
+- Les tests leur attribuent explicitement des rectangles géométriques **de contrôle uniquement**, simulent aperçu/validation et exportent les trois documents : **73 Basic, 4 Cloze et 8 notes Occlusion**. Ces rectangles de test ne sont ni préchargés dans l’application ni proposés comme réponses pédagogiques.
+- Le moteur officiel importe les huit notes puis modifie leur masque via `update_image_occlusion_note()` ; l’image reste identique et les formes demeurent natives et éditables.
+- Regroupement de rectangles, numéros distincts, refus d’export avant revue, modification en cours, changement d’image, événements répétés/périmés et messages rapprochés sont couverts.
+- Chromium teste le toucher émulé (dessiner, déplacer, redimensionner, défiler), les événements de stylet synthétiques, l’annulation, le regroupement, le zoom et le changement de largeur.
+- Un vrai serveur Streamlit local teste l’import PDF, le composant, l’aperçu, les validations, le téléchargement et son invalidation après modification. Le changement de carte doit préserver les zones enregistrées et laisser une nouvelle note vierge.
 
-1. Éditeur tactile de rectangles et regroupement des cibles, avec aperçu masque actif/inactif et validation par note.
-2. Conservation des coordonnées normalisées et d’un manifeste lié au PDF et au canevas. Les deux images de Biologie 15 doivent être composées à partir de leurs placements source, sans nouvelle interprétation du cours.
-3. Chemin d’export via le moteur officiel, isolé par session/export, conservant les identifiants et le type natif. Ne pas injecter seulement les templates dans `genanki`.
-4. Vérification/import de ce format natif par le moteur officiel : le vérificateur SQLite legacy actuel de l’application ne doit pas supposer la même structure d’archive.
-5. Contrôle du canevas et des interactions sur Safari iPad et dans le client Anki cible.
+## Limites clairement distinguées
 
-La roue Anki testée est 26.9.3, Linux `manylinux_2_35` : Python et glibc de l’hébergement final doivent être vérifiés avant d’ajouter cette dépendance à l’application. Aucune installation sur l’iPad ni aucun service payant ne serait requis pour l’édition web ; cette expérience n’est pas encore intégrée.
+**Pas de test physique sur Safari iPad ni Apple Pencil.** Le toucher est émulé dans Chromium ; les événements de stylet sont synthétiques. Le rejet de paume, les interruptions système d’iPadOS et le comportement du Pencil réel doivent encore être essayés sur l’appareil.
 
-Le test headless vérifie le modèle, les données et le HTML natifs, **pas l’exécution graphique JavaScript du canevas dans un vrai navigateur**. L’Occlusion du cours n’est donc pas annoncée comme prête à utiliser ou déployée.
+Le moteur officiel Anki 26.9.3 a vérifié import, édition des masques et HTML natif ; l’exécution graphique du canevas dans le client Anki de l’utilisateur n’a pas été testée. Aucun masque pédagogique des huit schémas n’est considéré validé sans intervention de l’utilisateur.
+
+La dépendance serveur est `anki==26.9.3`, roue Linux `manylinux_2_35` utilisée ici avec Python 3.12. La compatibilité de l’hébergeur final (notamment glibc ≥ 2.35) devra être contrôlée avant tout déploiement, qui n’est pas effectué par cette PR. Aucun logiciel local ni service payant n’est requis pour utiliser l’éditeur web.

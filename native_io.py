@@ -1,6 +1,6 @@
-"""Native Image Occlusion format study: rectangular-mask serialization only.
+"""Native Image Occlusion rectangular-mask serialization.
 
-This is not a production export path and never rasterizes a mask into an image.
+Masks stay separate from image pixels and are exported with the official Anki backend.
 A note must use the official Anki Image Occlusion stock model and backend, not
 an ordinary genanki Cloze model with an image substituted for real masks.
 """
@@ -12,7 +12,7 @@ def native_rectangles(masks):
     """Validate normalized source-image coordinates and emit native shape clozes.
 
     Each item has number, left, top, width, height. Same-number shapes share a
-    card. This initial rectangle study limits ordinals to 1..99 deliberately.
+    card. The rectangle editor limits ordinals to 1..99 deliberately.
     """
     if not masks:
         raise ValueError(

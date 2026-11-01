@@ -19,13 +19,15 @@ Les Cloze utilisent un modèle natif Anki de type Cloze (`Text` / `Extra`, filtr
 
 L’export ne laisse jamais une Occlusion ou une Cloze incomplète bloquer les Basic validées. Chaque archive produite est contrôlée avant téléchargement : base SQLite, nombre de notes/cartes, types des modèles, noms des champs, rectos/versos, numéros de Cloze et contenu exact des médias.
 
-### Occlusion d’image : limitation explicite
+### Image Occlusion native
 
-**L’application n’exporte pas encore les huit Occlusions du cours.** Une image statique n’est pas présentée comme une Occlusion native. Les cartes et leurs images sont détectées, montrées et préservées dans le dossier source, même sans texte.
+Les huit notes Occlusion des cours peuvent maintenant être annotées dans un **éditeur visuel web**, puis exportées au format natif Anki. Les images sont vierges de masques au départ : l’application n’en crée jamais automatiquement.
 
-Le [modèle officiel Anki](https://github.com/ankitects/anki/blob/main/rslib/src/image_occlusion/notetype.rs) utilise un type Cloze spécialisé, l’identification `OriginalStockKind::ImageOcclusion`, des champs Occlusions/Image/Header/BackExtra/Comments, et `anki.imageOcclusion.setup()` pour interpréter des masques. `genanki` ne fournit pas ce contrat natif complet et les marqueurs PDF ne contiennent pas les régions à masquer. L’étude [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md) démontre un aller-retour réellement natif avec le moteur officiel Anki, deux masques et deux cartes synthétiques. Ce prototype reste séparé du chemin d’export de l’application ; l’éditeur de masques pour les huit schémas reste à intégrer.
+Dessiner au doigt, au Pencil ou à la souris ; déplacer et redimensionner avec les poignées. Le mode Défiler et le zoom permettent de naviguer sans dessiner. Les rectangles sont associés à des numéros : même numéro = même carte Anki. Prévisualiser chaque numéro masqué, cocher sa vérification, puis valider la note avant export. Toute modification annule ces validations et le téléchargement précédent. Les masques et pixels sont séparés et restent éditables dans un client Anki compatible après import.
 
-Workflow sûr : télécharger le ZIP, ouvrir une image de `media/` ou une zone `cards/NNN/source-N.png` dans un client Anki compatible Occlusion native, dessiner les masques et vérifier la carte. Cette étape dépend des fonctions du client Anki ; elle n’est pas automatisée par l’application web. L’application reste gratuite, mais ce document ne promet pas qu’un client iPad particulier propose gratuitement l’édition d’occlusions.
+Un export mixte utilise le moteur officiel Anki dans un processus isolé, avec vérification par réimport. Les Basic/Cloze seules conservent le chemin précédent. L’éditeur ne charge aucune ressource externe. Le ZIP source conserve PDF, images non masquées et coordonnées. Biologie 15 comporte deux images : leur composition conserve les placements PDF et les deux fichiers originaux restent dans le paquet.
+
+Voir [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md) pour les huit schémas, la validation, le format et les limites. **Le toucher émulé Chromium est testé ; Safari sur un vrai iPad et l’Apple Pencil physique ne le sont pas.**
 
 ## Extraction et limites
 
@@ -52,6 +54,8 @@ python3 -m venv .venv
 .venv/bin/python -m streamlit run app.py --server.headless=true
 ```
 
+La dépendance officielle Anki demande une plateforme compatible (roue Linux manylinux_2_35 testée ici, glibc ≥ 2.35). La compatibilité de l’hébergeur public n’est pas présumée et aucun déploiement n’est effectué.
+
 Dans l’environnement cloud préparé, utiliser `/workspace/.venvs/anki-studio/bin/python` à la place de `.venv/bin/python`. Utiliser le checkout existant ; un worktree supplémentaire n’est pas nécessaire.
 
 Les tests synthétiques créent leurs PDF en mémoire : marqueurs vides, image seule, phrase unique, titres enveloppés, pages multiples, page très longue, sept niveaux, puces séparées, symboles, images entre textes, schémas vectoriels, Cloze, intégrité `.apkg`, ZIP source et parcours Streamlit (édition, validation, export partiel, invalidation). L’upload est simulé dans AppTest ; les autres widgets et leurs relances sont exercés. Ce n’est pas un test Safari réel.
@@ -64,11 +68,11 @@ ANKI_REFERENCE_DIR=/chemin/vers/pdf-prives .venv/bin/python -m pytest -q
 
 | Fichier | Basic | Cloze | Occlusion | Statut de cette validation |
 |---|---:|---:|---:|---|
-| `Anki 2 ANTHROPO .pdf` | 9 | 1 | 1 | Confirmé : 11 marqueurs, 1 image ; 9 Basic et 1 Cloze natives exportées ; Occlusion conservée dans les sources |
+| `Anki 2 ANTHROPO .pdf` | 9 | 1 | 1 | Confirmé : 11 marqueurs, 1 image ; 9 Basic et 1 Cloze natives exportées ; Occlusion native disponible après dessin et validation |
 | `Anki 2 HISTO.pdf` | 16 | 0 | 0 | Confirmé sur la copie compressée : 16 marqueurs, 49 images ; 16 Basic exportées dans le test |
-| `Anki 1 BIO.pdf` | 48 | 3 | 7 | Confirmé sur la copie compressée : 58 marqueurs, 43 images ; 48 Basic et 3 Cloze natives exportées ; Occlusions conservées dans les sources |
+| `Anki 1 BIO.pdf` | 48 | 3 | 7 | Confirmé sur la copie compressée : 58 marqueurs, 43 images ; 48 Basic et 3 Cloze natives exportées ; 7 Occlusions natives disponibles après dessin et validation |
 
-Les tests réels comparent d’abord les nombres rapportés aux lignes brutes du PDF, puis vérifient la conservation des éléments et textes, des images et l’export. Ils sont explicitement ignorés si le fichier manque. Les noms du tableau sont les noms canoniques utilisés par les tests ; les copies compressées fournies ont été liées à ces noms dans un dossier privé hors dépôt. La validation porte sur ces copies, sans supposer leur identité visuelle avec les PDF non compressés. Les cartes Glandes exocrines / Mérocrine / Apocrine ont désormais des régressions **sur le PDF réel d’histologie**, en complément des fixtures synthétiques : texte exact, parents, niveaux, retraits, images (0 / 4 / 2) et ordre. Les trois PDF totalisent **85 marqueurs et 93 occurrences d’images**. La revue critique a révélé que les anciens exports de 73 Basic comprenaient six réponses vides. Les six Basic sont désormais résolues et les quatre Cloze ont des suppressions natives : les exports de test contiennent **73 Basic + 4 Cloze = 77 notes/cartes**. Les huit Occlusions restent explicitement exclues du paquet courant, sans remplacement par de simples images. Aucun élément source n’est supprimé. Les corrections des dix passages sont des recettes explicites dans `reviewed_passages.json`, appliquées seulement après correspondance du texte complet et du type. Elles extraient les titres du texte source et conservent le passage intégral au verso ; elles ne prétendent pas résoudre automatiquement des passages différents.
+Les tests réels comparent d’abord les nombres rapportés aux lignes brutes du PDF, puis vérifient la conservation des éléments et textes, des images et l’export. Ils sont explicitement ignorés si le fichier manque. Les noms du tableau sont les noms canoniques utilisés par les tests ; les copies compressées fournies ont été liées à ces noms dans un dossier privé hors dépôt. La validation porte sur ces copies, sans supposer leur identité visuelle avec les PDF non compressés. Les cartes Glandes exocrines / Mérocrine / Apocrine ont désormais des régressions **sur le PDF réel d’histologie**, en complément des fixtures synthétiques : texte exact, parents, niveaux, retraits, images (0 / 4 / 2) et ordre. Les trois PDF totalisent **85 marqueurs et 93 occurrences d’images**. La revue critique a révélé que les anciens exports de 73 Basic comprenaient six réponses vides. Les six Basic sont désormais résolues et les quatre Cloze ont des suppressions natives : les exports de test contiennent **73 Basic + 4 Cloze = 77 notes/cartes**. Les huit Occlusions sont maintenant prises en charge nativement après dessin et validation manuels. Les tests des trois paquets complets vérifient **85 notes/cartes** avec un masque de contrôle par note Occlusion ; les masques de contrôle ne sont pas proposés dans l’application. Aucun élément source n’est supprimé. Les corrections des dix passages sont des recettes explicites dans `reviewed_passages.json`, appliquées seulement après correspondance du texte complet et du type. Elles extraient les titres du texte source et conservent le passage intégral au verso ; elles ne prétendent pas résoudre automatiquement des passages différents.
 
 Le contrôle renforcé compare aussi les mots et la ponctuation au second lecteur PDF **Poppler** (`pdftotext`), puis les retraits et l’ordre des images au HTML effectivement généré. Les retours de ligne et espaces typographiques sont distingués des changements de mots. Pour exécuter l’import/rendu avec le moteur officiel Anki dans un interpréteur séparé :
 
@@ -80,6 +84,6 @@ ANKI_REFERENCE_DIR=/chemin/vers/pdf-prives \
   .venv/bin/python -m pytest -q
 ```
 
-`pdftotext` doit être installé pour le contrôle indépendant. Les contrôles dont l’outil, l’interpréteur ou le PDF manque sont explicitement ignorés ; une suite sans PDF privés ne démontre pas la fidélité sur ces cours. Le job CI `native-anki` vérifie le Cloze synthétique et l’aller-retour d’Occlusion native synthétique avec le moteur officiel ; les PDF privés restent hors GitHub.
+`pdftotext` doit être installé pour le contrôle indépendant. Pour les tests du navigateur, installer aussi Chromium (`python -m playwright install --with-deps chromium` ou navigateur système). Les contrôles dont l’outil, le navigateur, l’interpréteur ou le PDF manque sont explicitement ignorés ; une suite sans PDF privés ne démontre pas la fidélité sur ces cours. Les jobs CI vérifient les formats natifs et les interactions du composant dans Chromium, sans déploiement ; les PDF privés restent hors GitHub.
 
 Voir [REVIEW.md](REVIEW.md) pour la revue critique et [VALIDATION.md](VALIDATION.md) pour les résultats exécutés et les contrôles restant à faire avant déploiement.

@@ -20,6 +20,16 @@ from engine import (
 from exporter import build_apkg, export_plan, export_reason, source_bundle, fields_for
 from exporter import cloze_numbers
 from cloze_preview import preview_cloze
+from occlusion import (
+    apply_editor_event,
+    groups,
+    fingerprint,
+    review_group,
+    ready_to_confirm,
+    confirm_note,
+    invalidate,
+)
+from occlusion_component import editor as occlusion_editor
 
 st.set_page_config(page_title="Anki Studio", page_icon="📚", layout="wide")
 st.title("📚 Anki Studio")
@@ -72,8 +82,8 @@ index = st.selectbox(
     "Choisir une carte",
     range(len(cards)),
     format_func=lambda i, reviewed=frozenset(validated): (
-        f"{'✓ ' if i in reviewed else ''}{i + 1}. "
-        f"{' — '.join(cards[i]['context'] + [cards[i]['title']])[:90] or '[Titre à renseigner]'}"
+        f"{'✓ ' if i in reviewed else ''}{i + 1} · "
+        f"{' — '.join(cards[i]['context'] + [cards[i]['title']])[:90] or ('[Occlusion sans titre]' if cards[i]['type'] == 'CARTE OCCLUSION' else '[Titre à renseigner]')}"
     ),
     key=f"select_{digest}",
 )
@@ -134,6 +144,52 @@ with right:
         height=620,
         scrolling=True,
     )
+if card["type"] == "CARTE OCCLUSION" and card.get("io", {}).get("canvas"):
+    st.subheader("Dessiner et vérifier les zones d’occlusion")
+    st.caption(
+        "Aucun masque automatique. Dessiner, déplacer ou redimensionner ; utiliser Défiler pour naviguer dans l’image. Chaque modification annule la validation."
+    )
+    editor_id = f"{digest}:{index}:{card['io']['canvas']['sha256']}"
+    event = occlusion_editor(card, editor_id, key=f"io_{digest}_{index}")
+    try:
+        before_editor = fingerprint(card)
+        updated, accepted = apply_editor_event(card, event, editor_id)
+        if accepted:
+            card = updated
+            cards[index] = card
+            st.session_state.edits[index] = card
+            if event["kind"] in ("editing", "commit") or before_editor != fingerprint(
+                card
+            ):
+                validated.discard(index)
+                st.session_state.apkg = None
+                st.session_state.bundle = None
+    except (ValueError, KeyError, TypeError) as error:
+        validated.discard(index)
+        st.session_state.apkg = None
+        st.session_state.bundle = None
+        invalidate(card)
+        card["io"]["draft"] = True
+        st.session_state.edits[index] = card
+        cards[index] = card
+        st.error(f"Zones refusées : {error}")
+    state = card["io"]
+    fp = fingerprint(card)
+    for number in groups(card):
+        group_checked = st.checkbox(
+            f"Carte Anki {number} : j’ai vérifié les zones masquées et la réponse.",
+            value=number in state["reviewed"],
+            disabled=state["draft"] or number not in state["previewed"],
+            key=f"io_review_{prefix}_{fp}_{state['epoch']}_{number}",
+        )
+        review_group(card, number, group_checked)
+    if groups(card) and not ready_to_confirm(card):
+        st.info(
+            "Dans l’éditeur : afficher l’aperçu masqué de chaque numéro, puis cocher sa vérification ci-dessus."
+        )
+    if state["draft"]:
+        st.warning("Modification en cours : l’export de cette note est désactivé.")
+
 for warning in card["warnings"]:
     st.warning(warning)
 
@@ -188,7 +244,7 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
         saved = st.form_submit_button("Enregistrer les corrections")
     if saved:
         try:
-            if not title.strip():
+            if not title.strip() and card["type"] != "CARTE OCCLUSION":
                 raise ValueError("Renseignez un titre.")
             updated = copy.deepcopy(card)
             updated.update(
@@ -216,6 +272,8 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
                 restore_source_title(updated, st.session_state.cards[index]["title"])
             updated["levels"] = update_edited_levels(updated["blocks"])
             updated["back"] = render_blocks(updated["blocks"])
+            if updated.get("io"):
+                invalidate(updated)
             if (
                 updated.get("proposed_deletion")
                 and "{{c1::" + updated["proposed_deletion"] + "}}"
@@ -236,19 +294,35 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
         except (ValueError, TypeError) as error:
             st.error(str(error))
 
-current_issue = export_reason(card)
-if current_issue:
-    st.info(current_issue)
 st.subheader("Contrôle de fidélité")
+is_io = card["type"] == "CARTE OCCLUSION"
+can_confirm = not is_io or ready_to_confirm(card)
+verify_key = "verified_" + prefix
+if is_io:
+    verify_key += (
+        "_"
+        + fingerprint(card)
+        + str(card["io"]["epoch"])
+        + str(card["io"]["reviewed"])
+        + str(card["io"]["draft"])
+    )
 checked = st.checkbox(
     "J’ai comparé le titre, chaque ligne, les retraits, les images et leur ordre avec le PDF.",
-    value=index in validated,
-    key="verified_" + prefix,
+    value=index in validated and can_confirm,
+    key=verify_key,
+    disabled=not can_confirm,
 )
-if checked:
+if checked and can_confirm:
+    if is_io:
+        confirm_note(card)
     validated.add(index)
 else:
     validated.discard(index)
+    if is_io:
+        card["io"]["verified"] = None
+current_issue = export_reason(card)
+if current_issue:
+    st.info(current_issue)
 # Rebuild on each validation change so old downloads cannot expose stale selections.
 plan = export_plan(cards, validated)
 selection = (tuple(plan["included"]), tuple(sorted(validated)))
@@ -273,8 +347,7 @@ if plan["excluded"]:
     )
 st.caption(
     "Export partiel : seules les notes validées et compatibles sont incluses. "
-    "Une note Cloze peut produire plusieurs cartes. Les cartes Occlusion restent dans le dossier source ; "
-    "leur export natif et l’éditeur de masques ne sont pas encore intégrés."
+    "Une note Cloze ou Occlusion peut produire plusieurs cartes. Seules les zones dessinées, prévisualisées et validées sont exportées au format natif ; les sources restent inchangées."
 )
 if st.button("Préparer le paquet .apkg", disabled=not plan["included"]):
     try:
@@ -307,6 +380,5 @@ if st.session_state.bundle:
     )
 st.caption(
     "Le dossier source contient le PDF original, toutes les notes, les images et les zones PDF. "
-    "Pour une Occlusion native, créer les masques dans un client Anki compatible ; "
-    "cette étape dépend du client et n’est pas automatisée dans Safari."
+    "Les zones validées sont exportées en notes Image Occlusion natives, éditables dans un client Anki compatible."
 )

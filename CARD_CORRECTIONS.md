@@ -39,4 +39,4 @@ Chaque passage complet devient le champ natif `Text`, avec une suppression `{{c1
 - Fidélité Poppler des trois PDF maintenue ; le titre-concept dérivé n’est pas compté une seconde fois comme contenu source.
 - Import des paquets réels et rendu des quatre Cloze par le moteur officiel Anki 26.9.3.
 
-Les six Basic et quatre Cloze ne sont plus des exclusions techniques : les exports de test comprennent **73 Basic + 4 Cloze = 77 notes/cartes**, avant validation pédagogique de l’utilisateur. Les huit Occlusions restent distinctes : voir [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md).
+Les six Basic et quatre Cloze ne sont plus des exclusions techniques : les exports de test comprennent **73 Basic + 4 Cloze = 77 notes/cartes**, avant validation pédagogique de l’utilisateur. Les huit Occlusions sont désormais annotables et exportables nativement après validation manuelle : voir [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md).

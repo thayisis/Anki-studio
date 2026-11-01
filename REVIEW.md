@@ -23,6 +23,6 @@ La branche a été revue sans fusion et sans déploiement. **L’ancien bilan «
 
 ## Décision
 
-**Ne pas considérer cette revue comme une autorisation de fusionner ou déployer.** Les défauts confirmés ont été corrigés et les résultats de test renforcés. Les six Basic et les quatre Cloze sont maintenant résolues sur les passages fournis : voir [CARD_CORRECTIONS.md](CARD_CORRECTIONS.md). Les huit Occlusions du cours ne sont pas encore exportées nativement ; une preuve d’aller-retour natif synthétique a été ajoutée, détaillée dans [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md). La validation Safari iPad, les petites légendes dans les images et la revue sémantique exhaustive des titres ne sont pas démontrées.
+**Ne pas considérer cette revue comme une autorisation de fusionner ou déployer.** Les défauts confirmés ont été corrigés et les résultats de test renforcés. Les six Basic et les quatre Cloze sont maintenant résolues sur les passages fournis : voir [CARD_CORRECTIONS.md](CARD_CORRECTIONS.md). Les huit Occlusions sont maintenant prises en charge par l’éditeur manuel et l’export natif vérifié par Anki, détaillés dans [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md). La validation Safari iPad, les petites légendes dans les images et la revue sémantique exhaustive des titres ne sont pas démontrées.
 
 Voir [VALIDATION.md](VALIDATION.md) pour les commandes, résultats et limites précises.

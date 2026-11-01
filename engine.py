@@ -531,11 +531,7 @@ def parse_pdf(data):
                     "Lignes sans puce conservées avec leur retrait ; vérifier les paragraphes."
                 )
             kind = " ".join(marker["original_text"].upper().split())
-            if kind == "CARTE OCCLUSION":
-                warnings.append(
-                    "Occlusion native non exportée : utiliser le dossier source dans Anki."
-                )
-            elif kind == "CARTE CLOZE":
+            if kind == "CARTE CLOZE":
                 warnings.append(
                     "Cloze : ajouter/vérifier les suppressions {{c1::texte}} avant export."
                 )
@@ -594,6 +590,10 @@ def parse_pdf(data):
             )
     for card in cards:
         apply_reviewed_partition(card)
+        if card["type"] == "CARTE OCCLUSION":
+            from occlusion import prepare_occlusion
+
+            prepare_occlusion(card)
     return cards
 
 

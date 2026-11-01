@@ -1,4 +1,4 @@
-"""Study tests, not a claim that lecture Occlusions are already supported in the app."""
+"""Core native rectangles and genuine stock-model round-trip verification."""
 
 import json
 import os
