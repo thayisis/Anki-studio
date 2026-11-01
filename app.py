@@ -9,8 +9,15 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from engine import crop, parse_pdf, preview_html, render_blocks
-from exporter import build_apkg, export_plan, source_bundle
+from engine import (
+    crop,
+    parse_pdf,
+    preview_html,
+    render_blocks,
+    restore_source_title,
+    update_edited_levels,
+)
+from exporter import build_apkg, export_plan, export_reason, source_bundle
 
 st.set_page_config(page_title="Anki Studio", page_icon="📚", layout="wide")
 st.title("📚 Anki Studio")
@@ -64,7 +71,7 @@ index = st.selectbox(
     range(len(cards)),
     format_func=lambda i, reviewed=frozenset(validated): (
         f"{'✓ ' if i in reviewed else ''}{i + 1}. "
-        f"{html.unescape(cards[i]['front'])[:90] or '[Titre à renseigner]'}"
+        f"{' — '.join(cards[i]['context'] + [cards[i]['title']])[:90] or '[Titre à renseigner]'}"
     ),
     key=f"select_{digest}",
 )
@@ -116,7 +123,7 @@ for warning in card["warnings"]:
 
 with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
     st.caption(
-        "Pas de HTML : chaque ligne reste à sa place. Un retrait est mesuré en pixels PDF. "
+        "Pas de HTML : chaque ligne reste à sa place. Un retrait est mesuré en points PDF. "
         "Les images restent dans l’ordre des lignes. Les changements annulent la validation."
     )
     with st.form("editor_" + prefix):
@@ -127,7 +134,9 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
             key="context_" + prefix,
         )
         restore_title = st.checkbox(
-            "Replacer aussi le titre source au début du verso", key="restore_" + prefix
+            "Replacer aussi le titre source au début du verso",
+            key="restore_" + prefix,
+            disabled=card.get("source_title_restored", False),
         )
         rows = [
             {
@@ -170,7 +179,16 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
                 title=title,
                 context=[line for line in context.splitlines() if line.strip()],
             )
-            updated["front"] = html.escape(" — ".join(updated["context"] + [title]))
+            updated["title_html"] = (
+                card.get("title_html", html.escape(title))
+                if title == card["title"]
+                else html.escape(title)
+            )
+            updated["front"] = (
+                html.escape(" — ".join(updated["context"])) + " — "
+                if updated["context"]
+                else ""
+            ) + updated["title_html"]
             for block, row in zip(updated["blocks"], edited):
                 block["indent"] = float(row["Retrait"])
                 if block["kind"] == "text":
@@ -179,18 +197,8 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
                     if block["bullet"] and not block.get("bullet_text"):
                         block["bullet_text"] = "•"
             if restore_title:
-                source_title = st.session_state.cards[index]["title"]
-                if source_title:
-                    updated["blocks"].insert(
-                        0,
-                        dict(
-                            kind="text",
-                            text=source_title,
-                            indent=0,
-                            level=0,
-                            bullet=False,
-                        ),
-                    )
+                restore_source_title(updated, st.session_state.cards[index]["title"])
+            updated["levels"] = update_edited_levels(updated["blocks"])
             updated["back"] = render_blocks(updated["blocks"])
             st.session_state.edits[index] = updated
             st.session_state.revisions[index] = revision + 1
@@ -201,6 +209,9 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
         except (ValueError, TypeError) as error:
             st.error(str(error))
 
+current_issue = export_reason(card)
+if current_issue:
+    st.info(current_issue)
 st.subheader("Contrôle de fidélité")
 checked = st.checkbox(
     "J’ai comparé le titre, chaque ligne, les retraits, les images et leur ordre avec le PDF.",

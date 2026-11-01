@@ -126,11 +126,32 @@ def test_reference_marker_counts_and_no_text_loss(filename, expected):
     payload, plan = build_apkg(
         cards, set(range(len(cards))), path.stem, hashlib.sha256(data).hexdigest()
     )
-    assert plan["notes"] >= expected["CARTE"]
+    assert (
+        plan["notes"]
+        == {"Anki 2 HISTO.pdf": 16, "Anki 1 BIO.pdf": 44, "Anki 2 ANTHROPO .pdf": 7}[
+            filename
+        ]
+    )
+    empty_answers = {
+        i + 1
+        for i, c in enumerate(cards)
+        if c["type"] == "CARTE"
+        and not any(
+            b["kind"] == "image" or b.get("text", "").strip() for b in c["blocks"]
+        )
+    }
+    assert (
+        empty_answers
+        == {
+            "Anki 2 HISTO.pdf": set(),
+            "Anki 1 BIO.pdf": {16, 17, 18, 54},
+            "Anki 2 ANTHROPO .pdf": {7, 8},
+        }[filename]
+    )
     if "ANTHROPO" in filename:
-        assert plan["notes"] == 9 and plan["cards"] == 9
+        assert plan["notes"] == 7 and plan["cards"] == 7
         assert cards[8]["type"] == "CARTE OCCLUSION" and len(cards[8]["media"]) == 1
-        assert cards[3]["context"] == ["Descola"]
+        assert all(cards[i]["context"] == ["Descola"] for i in (3, 4, 5, 6, 7, 9, 10))
         assert (
             "Un organisme domestique est somewhat dependent de l’humain"
             in cards[3]["back"]
@@ -239,3 +260,14 @@ def test_real_histology_key_cards(index, title, expected_text, image_count):
         ]
     assert cards[4]["context"][-1] == "Morphologie"
     assert "Mode et nature" not in " ".join(cards[4]["context"])
+
+
+def test_real_biology_scientific_digit_preserved_in_html():
+    path = REFERENCE_DIR / "Anki 1 BIO.pdf"
+    if not path.exists():
+        pytest.skip("Biology reference unavailable")
+    card = parse_pdf(path.read_bytes())[29]
+    assert (
+        'O<span style="font-size:66.6666%;vertical-align:0em">2 </span>)'
+        in card["back"]
+    )

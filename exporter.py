@@ -70,6 +70,22 @@ def export_reason(card):
         return "Type inconnu."
     if not html.unescape(re.sub("<[^>]+>", "", card["front"])).strip():
         return "Titre à renseigner."
+    if card["type"] == "CARTE":
+        meaningful = (
+            any(
+                b["kind"] == "image" or str(b.get("text", "")).strip()
+                for b in card["blocks"]
+            )
+            if "blocks" in card
+            else bool(
+                re.sub("<[^>]+>", "", card["back"]).strip()
+                or re.search(r"<img\b", card["back"])
+            )
+        )
+        if not meaningful:
+            return (
+                "Verso vide : corriger le titre et replacer le texte source au verso."
+            )
     if card["type"] == "CARTE CLOZE" and not cloze_numbers(fields_for(card)[0]):
         return "Cloze sans suppression valide {{c1::texte}} (imbrication non prise en charge)."
     media = dict(card["media"])
@@ -176,6 +192,7 @@ def verify_apkg(payload, expected, expected_cards, expected_media):
                     or [f["name"] for f in model["flds"]]
                     != [f["name"] for f in wanted.fields]
                     or model["tmpls"][0]["qfmt"] != wanted.templates[0]["qfmt"]
+                    or model["tmpls"][0]["afmt"] != wanted.templates[0]["afmt"]
                 ):
                     raise ValueError("Modèle Anki incorrect.")
                 nid = db.execute(
@@ -206,6 +223,7 @@ def source_bundle(data, cards, validated):
         manifest = []
         for i, card in enumerate(cards):
             entry = {k: v for k, v in card.items() if k != "media"}
+            entry["back"] = render_blocks(card["blocks"])
             entry["media"] = [n for n, _ in card["media"]]
             entry["validated"] = i in validated
             entry["export_reason"] = export_reason(card)

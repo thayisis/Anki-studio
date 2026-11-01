@@ -89,3 +89,16 @@ def test_ui_editor_changes_text_indentation_and_restores_source_title():
         assert blocks[0]["text"] == "Title"
         assert blocks[1]["text"] == "Corrected answer."
         assert blocks[1]["indent"] == 42
+
+
+def test_ui_title_recovery_is_once_only_after_repeated_saves():
+    with patch("streamlit.file_uploader", return_value=upload()):
+        at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py").run()
+        at.checkbox[0].check()
+        button(at, "Enregistrer les corrections").click().run()
+        assert not at.exception and at.checkbox[0].disabled
+        before = at.session_state["edits"][0]["blocks"]
+        at.text_area[0].set_value("New title")
+        button(at, "Enregistrer les corrections").click().run()
+        assert not at.exception
+        assert at.session_state["edits"][0]["blocks"] == before

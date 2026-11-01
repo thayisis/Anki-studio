@@ -13,7 +13,7 @@ Application Streamlit gratuite pour convertir des PDF balisés en notes Anki, av
 
 ### Basic et Cloze
 
-Les Basic utilisent les champs natifs `Front` / `Back`. Le titre n’est pas répété dans le contenu du verso (Anki affiche normalement le recto au-dessus de la réponse).
+Les Basic utilisent les champs natifs `Front` / `Back`. Un verso vide (ou ne contenant que des puces sans texte ni image) est explicitement exclu, même après validation. Corriger le titre et utiliser la récupération du titre source au verso avant de revalider ; cette récupération ne peut pas dupliquer le texte lors d’enregistrements successifs. Le titre n’est pas répété dans le contenu du verso (Anki affiche normalement le recto au-dessus de la réponse).
 
 Les Cloze utilisent un modèle natif Anki de type Cloze (`Text` / `Extra`, filtre `{{cloze:Text}}`). Le marqueur `CARTE CLOZE` ne précise pas les mots à masquer : l’utilisateur doit saisir `{{c1::texte}}`, `{{c2::autre texte::indice}}`, etc. dans le titre ou une ligne. Les suppressions vides, incomplètes ou imbriquées sont refusées explicitement. Un même numéro produit une seule carte ; plusieurs numéros produisent plusieurs cartes.
 
@@ -33,6 +33,7 @@ Le moteur est séparé en étapes dans `engine.py` : extraction des caractères/
 
 - Chaque marqueur donne une entrée, même vide ou composée uniquement d’images. Une entrée sans titre nécessite une correction.
 - Le texte extrait n’est ni résumé, ni traduit, ni corrigé. Les caractères `®`, `©`, etc. ne sont plus supprimés. Les glyphes Wingdings reconnus comme puces peuvent être traités comme tels.
+- Les caractères plus petits ou décalés (notamment le petit « 2 » de la formule O2 du PDF de biologie) conservent leurs tailles et positions relatives en HTML, sans réécriture de leurs caractères. Si le texte de la ligne est corrigé, les anciennes tailles ne sont pas appliquées au nouveau texte : vérifier les indices/exposants après édition.
 - Les lignes physiques restent distinctes au verso. Une continuation géométriquement probable est marquée dans les données ; on ne fusionne pas des puces successives. Les retraits PDF restent visibles, sans limite à trois niveaux.
 - Seuls des titres avec preuve typographique ou un plan de puces établi par les retraits peuvent donner du contexte ; les phrases précédentes ne sont pas utilisées arbitrairement. Le premier paragraphe et les parents proposés doivent être confirmés. La structure sémantique ne peut pas être garantie automatiquement.
 - Images et schémas vectoriels sont conservés dans l’ordre géométrique, avec leurs transformations et superpositions visibles. Un média très volumineux est limité à 16 mégapixels avec avertissement. Le PDF original est conservé dans le ZIP.
@@ -63,10 +64,22 @@ ANKI_REFERENCE_DIR=/chemin/vers/pdf-prives .venv/bin/python -m pytest -q
 
 | Fichier | Basic | Cloze | Occlusion | Statut de cette validation |
 |---|---:|---:|---:|---|
-| `Anki 2 ANTHROPO .pdf` | 9 | 1 | 1 | Confirmé : 11 marqueurs, 1 image ; 9 Basic exportées dans le test ; Cloze sans suppressions ; Occlusion conservée |
+| `Anki 2 ANTHROPO .pdf` | 9 | 1 | 1 | Confirmé : 11 marqueurs, 1 image ; 7 Basic exportées ; 2 versos vides explicitement exclus ; Cloze sans suppressions ; Occlusion conservée |
 | `Anki 2 HISTO.pdf` | 16 | 0 | 0 | Confirmé sur la copie compressée : 16 marqueurs, 49 images ; 16 Basic exportées dans le test |
-| `Anki 1 BIO.pdf` | 48 | 3 | 7 | Confirmé sur la copie compressée : 58 marqueurs, 43 images ; 48 Basic exportées dans le test |
+| `Anki 1 BIO.pdf` | 48 | 3 | 7 | Confirmé sur la copie compressée : 58 marqueurs, 43 images ; 44 Basic exportées ; 4 versos vides explicitement exclus |
 
-Les tests réels comparent d’abord les nombres rapportés aux lignes brutes du PDF, puis vérifient la conservation des éléments et textes, des images et l’export. Ils sont explicitement ignorés si le fichier manque. Les noms du tableau sont les noms canoniques utilisés par les tests ; les copies compressées fournies ont été liées à ces noms dans un dossier privé hors dépôt. La validation porte sur ces copies, sans supposer leur identité visuelle avec les PDF non compressés. Les cartes Glandes exocrines / Mérocrine / Apocrine ont désormais des régressions **sur le PDF réel d’histologie**, en complément des fixtures synthétiques : texte exact, parents, niveaux, retraits, images (0 / 4 / 2) et ordre. Les trois PDF totalisent **85 marqueurs et 93 occurrences d’images**. Les exports de test contiennent 73 Basic ; les quatre Cloze sans suppressions et les huit Occlusions restent exclues explicitement.
+Les tests réels comparent d’abord les nombres rapportés aux lignes brutes du PDF, puis vérifient la conservation des éléments et textes, des images et l’export. Ils sont explicitement ignorés si le fichier manque. Les noms du tableau sont les noms canoniques utilisés par les tests ; les copies compressées fournies ont été liées à ces noms dans un dossier privé hors dépôt. La validation porte sur ces copies, sans supposer leur identité visuelle avec les PDF non compressés. Les cartes Glandes exocrines / Mérocrine / Apocrine ont désormais des régressions **sur le PDF réel d’histologie**, en complément des fixtures synthétiques : texte exact, parents, niveaux, retraits, images (0 / 4 / 2) et ordre. Les trois PDF totalisent **85 marqueurs et 93 occurrences d’images**. La revue critique a révélé que les anciens exports de 73 Basic comprenaient six réponses vides. Les exports corrigés contiennent **67 Basic** ; six autres Basic nécessitent une correction titre/verso. Les quatre Cloze sans suppressions et les huit Occlusions restent exclues explicitement. Aucun élément source n’est supprimé.
 
-Voir [VALIDATION.md](VALIDATION.md) pour les résultats exécutés et les contrôles restant à faire avant déploiement.
+Le contrôle renforcé compare aussi les mots et la ponctuation au second lecteur PDF **Poppler** (`pdftotext`), puis les retraits et l’ordre des images au HTML effectivement généré. Les retours de ligne et espaces typographiques sont distingués des changements de mots. Pour exécuter l’import/rendu avec le moteur officiel Anki dans un interpréteur séparé :
+
+```sh
+python3 -m venv /chemin/vers/anki-check
+/chemin/vers/anki-check/bin/python -m pip install anki==26.9.3
+ANKI_REFERENCE_DIR=/chemin/vers/pdf-prives \
+  ANKI_TEST_PYTHON=/chemin/vers/anki-check/bin/python \
+  .venv/bin/python -m pytest -q
+```
+
+`pdftotext` doit être installé pour le contrôle indépendant. Les contrôles dont l’outil, l’interpréteur ou le PDF manque sont explicitement ignorés ; une suite sans PDF privés ne démontre pas la fidélité sur ces cours. Le job CI `native-anki` vérifie le Cloze synthétique avec le moteur officiel ; les PDF privés restent hors GitHub.
+
+Voir [REVIEW.md](REVIEW.md) pour la revue critique et [VALIDATION.md](VALIDATION.md) pour les résultats exécutés et les contrôles restant à faire avant déploiement.

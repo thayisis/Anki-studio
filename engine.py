@@ -83,12 +83,35 @@ def extract_elements(doc):
                         prefix.end() if prefix else (1 if symbol else 0)
                     )
                     x = chars[offset]["bbox"][0] if offset < len(chars) else rect[0]
+                    # Preserve small/lowered/raised scientific glyphs without
+                    # rewriting their characters (e.g. O + a smaller digit 2).
+                    largest = max(spans, key=lambda s: s["size"])
+                    baseline = largest["origin"][1]
+                    runs = []
+                    cursor = 0
+                    text_end = len("".join(c["c"] for c in chars).rstrip())
+                    for span in spans:
+                        start = max(0, offset - cursor)
+                        stop = min(len(span["chars"]), text_end - cursor)
+                        if stop > start:
+                            runs.append(
+                                dict(
+                                    text="".join(
+                                        c["c"] for c in span["chars"][start:stop]
+                                    ),
+                                    ratio=span["size"] / largest["size"],
+                                    rise=(baseline - span["origin"][1]) / span["size"],
+                                )
+                            )
+                        cursor += len(span["chars"])
                     elements.append(
                         dict(
                             kind="text",
                             page=page.number,
                             bbox=rect,
                             text=content,
+                            layout_text=content,
+                            text_runs=runs,
                             original_text=text,
                             bullet=bullet,
                             bullet_text=text[: prefix.end()].strip()
@@ -220,7 +243,9 @@ def _is_continuation(previous, current):
 def heading_context(items, stack):
     """Use typographic/indent evidence, never arbitrary preceding body lines.
 
-    A stack holds only confidently styled headings. Equal-indent, equal-style
+    A stack follows typography and the measured bullet outline. Wrapped prose
+    is never reused as a section label without explicit heading typography.
+    Equal-indent, equal-style
     headings are siblings; a deeper heading may inherit a shallower parent.
     Ambiguous first paragraphs are retained whole, without invented parents.
     """
@@ -260,19 +285,28 @@ def heading_context(items, stack):
             or stack[-1]["size"] > first["font_size"] * 1.15
         ):
             stack.pop()
-        context = [s["title"] for s in stack]
+        context = [s["title"] for s in stack if s.get("context_allowed", True)]
         stack.append(
             dict(
                 title="\n".join(e["text"] for e in title_lines),
+                context_allowed=styled or len(title_lines) == 1,
                 x=first["text_x"],
                 size=first["font_size"],
             )
         )
     else:
         # Only strictly shallower, explicitly styled ancestors can be used.
-        context = [s["title"] for s in stack if s["x"] < first["text_x"] - 6]
+        context = [
+            s["title"]
+            for s in stack
+            if s["x"] < first["text_x"] - 6 and s.get("context_allowed", True)
+        ]
         warnings.append(
             "Premier paragraphe proposé comme titre ; contexte à confirmer."
+        )
+    if not styled and len(title_lines) > 1:
+        warnings.append(
+            "Titre issu d’un paragraphe sur plusieurs lignes : confirmer le concept et les parents."
         )
     return title_lines, context, warnings
 
@@ -325,6 +359,30 @@ def associate_images(items):
     return warnings
 
 
+def render_text(block):
+    """Retain PDF script sizing while original text is unchanged in the editor."""
+    value = block.get("text", "")
+    runs = block.get("text_runs", [])
+    if value != block.get("layout_text") or not runs:
+        return html.escape(value)
+    output = []
+    for run in runs:
+        text = html.escape(run["text"])
+        if abs(run["ratio"] - 1) > 0.01 or abs(run["rise"]) > 0.01:
+            text = (
+                f'<span style="font-size:{run["ratio"] * 100:.6g}%;'
+                f'vertical-align:{run["rise"]:.6g}em">{text}</span>'
+            )
+        output.append(text)
+    return "".join(output)
+
+
+def _display_bullet(value):
+    # Wingdings' Unicode mappings (§, ®, }) do not represent the printed
+    # bullet. Keep numbering; normalize other glyphs for ordinary HTML fonts.
+    return value if re.fullmatch(r"\d+[.)]", value) else "•"
+
+
 def render_blocks(blocks):
     """HTML derived from editable text + physical indentation, preserving line order."""
     result = []
@@ -355,7 +413,7 @@ def render_blocks(blocks):
                     )
                     glyphs += (
                         f'<span style="position:absolute;right:100%;margin-right:8px;top:{fraction:g}%">'
-                        f"{html.escape(linked.get('bullet_text', '•'))}</span>"
+                        f"{html.escape(_display_bullet(linked.get('bullet_text', '•')))}</span>"
                     )
             result.append(
                 f'<div style="{style}">{glyphs}<img src="{html.escape(block["media_name"], quote=True)}" '
@@ -368,12 +426,12 @@ def render_blocks(blocks):
             glyph = (
                 (
                     f'<span style="position:absolute;right:100%;margin-right:8px">'
-                    f"{html.escape(bullet)}</span>"
+                    f"{html.escape(_display_bullet(bullet))}</span>"
                 )
                 if bullet
                 else ""
             )
-            value = html.escape(block.get("text", ""))
+            value = render_text(block)
             result.append(
                 f'<div data-level="{block.get("level", 0)}" style="{style}">{glyph}{value}</div>'
             )
@@ -432,6 +490,7 @@ def parse_pdf(data):
                         ):
                             stack[-1]["title"] += "\n" + element["text"]
                             stack[-1]["source_id"] = element["source_id"]
+                            stack[-1]["context_allowed"] = False
                         previous = element
                         continue
                     previous = element
@@ -444,6 +503,7 @@ def parse_pdf(data):
                         stack.append(
                             dict(
                                 title=element["text"],
+                                context_allowed=True,
                                 x=x,
                                 size=element["font_size"],
                                 source_id=element["source_id"],
@@ -502,13 +562,17 @@ def parse_pdf(data):
                 {k: v for k, v in e.items() if k not in ("image", "warnings")}
                 for e in body
             ]
-            front = " — ".join(context + [title]) if title else ""
+            title_html = "\n".join(render_text(e) for e in title_lines)
             cards.append(
                 dict(
                     id=number,
                     type=kind,
-                    front=html.escape(front),
+                    front=(html.escape(" — ".join(context)) + " — " if context else "")
+                    + title_html
+                    if title
+                    else "",
                     title=title,
+                    title_html=title_html,
                     context=context,
                     back=render_blocks(blocks),
                     blocks=blocks,
@@ -527,6 +591,40 @@ def parse_pdf(data):
                 )
             )
     return cards
+
+
+def restore_source_title(card, source_title):
+    """Recover a heading misclassified as the whole question, once only."""
+    if source_title and not card.get("source_title_restored"):
+        card["blocks"].insert(
+            0,
+            dict(
+                kind="text",
+                text=source_title,
+                indent=0,
+                level=0,
+                bullet=False,
+                restored_source_title=True,
+            ),
+        )
+        card["source_title_restored"] = True
+
+
+def update_edited_levels(blocks):
+    """Keep exported level metadata in step with explicit editor indents."""
+    positions = []
+    for value in sorted(
+        float(b["indent"]) for b in blocks if b["kind"] == "text" and b.get("text")
+    ):
+        if not positions or value - positions[-1] > 4:
+            positions.append(value)
+    for b in blocks:
+        b["level"] = (
+            min(range(len(positions)), key=lambda n: abs(positions[n] - b["indent"]))
+            if positions
+            else 0
+        )
+    return positions
 
 
 def preview_html(back, media):

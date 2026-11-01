@@ -1,72 +1,70 @@
-# Validation — 1 novembre 2026
+# Validation après revue critique — 1 novembre 2026
 
-Branche locale : `fix/pdf-conversion`. Aucun déploiement, publication d’environnement ou modification de configuration publiée n’a été effectué pendant cette mission.
+Branche : `fix/pdf-conversion`. Aucune fusion et aucun déploiement. La revue détaillée est dans [REVIEW.md](REVIEW.md).
 
-## Résultats exécutés
+## Résultats réellement exécutés
 
-| Contrôle | Résultat |
-|---|---|
-| Régressions initiales sur le moteur précédent | 3 échecs, 1 réussite : carte image seule supprimée, marqueurs vides supprimés, symbole ® supprimé |
-| Suite finale avec le PDF d’anthropologie fourni | **45 réussites, 0 ignoré, 0 échec** |
-| PDF réels | Anthropologie et copies compressées d’Histologie et Biologie : tous exécutés |
-| Streamlit AppTest | 3 tests passent : sélection/validation par note, export partiel, édition du titre/texte/retrait, récupération du titre au verso, invalidation de la validation et du téléchargement après édition |
-| Serveur Streamlit | Démarrage effectif ; `/_stcore/health` renvoie `ok`, `/` renvoie du HTML |
-| Dépendances | `pip check` : aucune incompatibilité détectée |
-| Vérifications statiques | Ruff (`F,E9`) et `git diff --check` passent |
-
-Commande de la suite finale (le dossier est propre à cette session ; voir README pour les autres environnements) :
+**60 tests réussis, aucun échec, aucun test ignoré**, avec les trois PDF et l’interpréteur Anki officiel activés :
 
 ```sh
 ANKI_REFERENCE_DIR=/workspace/.anki-studio/reference-pdfs \
+  ANKI_TEST_PYTHON=/workspace/.venvs/anki-import-check/bin/python \
   /workspace/.venvs/anki-studio/bin/python -m pytest -q
 ```
 
-Versions installées : Python 3.12.14, Streamlit 1.66.1, PyMuPDF 1.28.2, genanki 0.13.1. La version minimale PyMuPDF du dépôt a été relevée à la version utilisée pour ces contrôles. La CI ajoutée exécute les tests synthétiques et ignore explicitement les PDF privés absents ; elle n’a pas encore été exécutée sur GitHub.
+Le dossier privé contient l’anthropologie fournie et des liens vers les copies compressées de biologie et d’histologie, sous leurs noms canoniques. Aucun PDF ni paquet de cours n’est ajouté au dépôt.
 
-## Mesures sur le fichier réel
-
-`Anki 2 ANTHROPO .pdf` : une longue page de 816 × 2156 points PDF ; comptage indépendant des lignes brutes : **9 CARTE, 1 CARTE CLOZE, 1 CARTE OCCLUSION**, soit 11.
-
-- Ancien moteur : 10 cartes rendues. Nouveau moteur : les 11 entrées sont conservées.
-- L’Occlusion, auparavant supprimée, contient une image conservée dans l’ordre, avec sa puce isolée associée.
-- Les identifiants de tous les éléments source après le premier marqueur sont représentés dans les titres ou les blocs, y compris les puces attachées. Chaque ligne de texte extraite est retrouvée sans réécriture dans le titre ou le verso. Le test contrôle aussi le nombre d’occurrences d’images.
-- La hiérarchie typographiquement attestée « Descola » fournit le contexte des sous-concepts concernés ; aucune phrase précédente arbitraire n’est utilisée comme titre parent.
-- Export de test, toutes les notes marquées validées **dans le test seulement** : 9 notes Basic, 9 cartes Anki. La Cloze n’a pas de suppression explicite dans le PDF ; elle est exclue avec motif. L’Occlusion est exclue avec motif.
-- Ces contrôles ne constituent pas une validation pédagogique ou visuelle humaine des 9 notes. L’application demande toujours la comparaison avec le PDF.
-
-Les deux PDF initiaux dépassaient la limite de transfert de 32 Mio. Les nouvelles copies compressées ont pu être lues et testées. Le dossier privé de test contient des liens vers ces copies, sous les noms canoniques du README ; aucun PDF n’a été ajouté au dépôt.
-
-| PDF effectivement testé | Basic | Cloze | Occlusion | Total | Occurrences d’images | Basic exportées dans le test |
+| Document testé | Basic détectées | Cloze | Occlusion | Total | Images (occurrences) | Basic exportables dans le test |
 |---|---:|---:|---:|---:|---:|---:|
-| Anthropologie | 9 | 1 | 1 | 11 | 1 | 9 |
+| Anthropologie | 9 | 1 | 1 | 11 | 1 | 7 |
 | Histologie compressée | 16 | 0 | 0 | 16 | 49 | 16 |
-| Biologie compressée | 48 | 3 | 7 | 58 | 43 | 48 |
-| Total | 73 | 4 | 8 | 85 | 93 | 73 |
+| Biologie compressée | 48 | 3 | 7 | 58 | 43 | 44 |
+| Total | 73 | 4 | 8 | 85 | 93 | 67 |
 
-La conservation de toutes les lignes physiques et de toutes les positions d’images est comparée à une extraction PyMuPDF indépendante du découpage du moteur. Chaque export de test vérifie les notes, cartes, modèles, champs et médias ; le marquage « validé » est simulé dans les tests et ne remplace pas la validation humaine.
+Les nombres de marqueurs sont confirmés indépendamment sur les PDF. Le marquage des notes comme « validées » est simulé **dans les tests uniquement** ; ce n’est pas une validation pédagogique.
 
-L’examen réel a révélé un défaut que les contrôles de conservation ne suffisaient pas à détecter : le contexte d’Histologie était absent car les sections ne sont pas en gras. Le moteur reconnaît maintenant le plan de puces établi par l’indentation et le poursuit entre les marqueurs. Il ne reprend pas simplement les dernières lignes. Les corrections ajoutent aussi le rendu de la puce à côté de son image, au lieu d’un point vide supplémentaire après elle.
+### Texte et ponctuation
 
-Les trois cartes réelles d’histologie ont des assertions de texte exact transcrit, hiérarchie, retraits, nombres d’images et ordre :
+Les 556 lignes de texte de cours non vides après les marqueurs (181 histologie, 291 biologie, 84 anthropologie) sont contrôlées : provenance PyMuPDF, puis décodage indépendant Poppler, comparaison de la séquence des mots/caractères de ponctuation au titre propre et au HTML du verso. Le test vérifie aussi qu’aucun mot Poppler après le premier marqueur n’est laissé sans représentation (marqueurs et glyphes de puces traités séparément).
 
-- **Glandes exocrines** : 8 lignes textuelles au verso, niveaux `[0,1,1,1,1,1,0,1]`, retraits `[0,20.02,20.02,20.02,20.02,20.02,0,20.02]` points PDF, aucune image.
-- **Mérocrine** : 6 lignes textuelles, 4 images et leurs puces associées. Parents : titre intégral de Glandes exocrines → Classification et diagnostic → Mode et nature de la sécrétion.
-- **Apocrine** : 7 lignes textuelles, dont 2 continuations de la phrase sur la mucine, 2 images et leurs puces. Mêmes parents que Mérocrine ; le contenu de Mérocrine n’est pas ajouté au titre.
+Les espaces typographiques et les coupures physiques de ligne ne constituent pas des mots ajoutés ou supprimés. Poppler séparait le petit chiffre 2 de O2 dans la carte Protéines : leurs boîtes se touchent avec un écart de -0,002 point. Le contrôle joint uniquement de telles boîtes jointives, pas les vrais espaces entre mots. La taille réduite de ce chiffre est désormais conservée dans le HTML par un span de taille relative ; aucune substitution du texte en Unicode différent n’est faite.
 
-La transition vers « Morphologie » est aussi vérifiée : elle remplace le parent « Mode et nature de la sécrétion » pour les cartes suivantes. Une fixture synthétique indépendante couvre cette logique dans la CI sans PDF privé. Les copies compressées ne permettent pas de promettre la résolution des images des fichiers initiaux ; leur fidélité à ces originaux n’a pas été comparée.
+### Retraits, images et titres
 
-## Ce qui a changé
+Les coordonnées du premier mot de chaque ligne sont comparées à Poppler ; les marges et niveaux sont lus dans le HTML rendu, pas uniquement dans le JSON. Les niveaux observés sont 0–4 en histologie et 0–3 dans les deux autres documents. Les puces séparées et les lignes enveloppées restent distinctes ; les glyphes de puces sont normalisés en HTML sans transformer un vrai ® dans le contenu.
 
-- `engine.py` : étapes séparées, frontières entre pages, rétention des marqueurs vides/images seules, lignes et symboles préservés, retraits réels sans limite de niveaux, puces séparées, images intercalées et schémas vectoriels, contexte prudent, avertissements et provenance.
-- `exporter.py` : export partiel Basic/Cloze, identifiants stables par PDF, vérification SQLite/modèles/champs/médias/numéros de cartes, ZIP source complet. Le test synthétique mixte vérifie 2 notes (Basic + Cloze) donnant 3 cartes.
-- `app.py` : édition sans HTML, disposition verticale possible sur iPad, validation indépendante, invalidation après correction, affichage de chaque exclusion et sauvegarde des sources.
-- `tests/`, `requirements-dev.txt`, `.github/workflows/tests.yml` : suite reproductible et CI. Les PDF privés sont ignorés et restent hors dépôt.
-- `requirements.txt`, `README.md`, `.gitignore` et ce rapport : dépendance, utilisation, limites et preuves.
+Les 93 placements d’images sont comptabilisés et comparés aux PDF ; leur ordre est contrôlé dans le HTML. Les médias des exports Basic sont importés dans Anki et comparés par SHA-256 : 49 fichiers uniques pour l’histologie, 34 pour la biologie (une image répétée partage son fichier), aucun pour les Basic d’anthropologie. Les images des Occlusions restent dans les sources et les aperçus.
 
-## Limites et décision de déploiement
+Glandes exocrines, Mérocrine et Apocrine ont des assertions de texte exact, contexte, niveaux et retraits. Leurs nombres d’images sont 0, 4 et 2. La transition vers Morphologie remplace correctement le parent Mode et nature de la sécrétion. En anthropologie, les longs paragraphes précédents ne sont plus réutilisés comme titres parents ; Descola est conservé.
 
-**Prêt pour revue et essai encadré des Basic/Cloze ; pas validé comme remplacement définitif de production.** Aucun déploiement n’a été demandé ou effectué.
+Des zones source ont aussi été inspectées visuellement, notamment Apocrine, Protéines/O2 et le paragraphe Il contredit… en anthropologie. Cette inspection ciblée n’est pas une lecture visuelle exhaustive de tous les pixels des 85 cartes.
 
-Avant généralisation : terminer la revue visuelle humaine des cartes et de la lisibilité des images compressées, essayer les interactions/téléchargements sur Safari iPad et importer les archives dans le client Anki réellement utilisé. Les archives ont été contrôlées directement ; aucun client Anki graphique ou Safari réel n’a été exécuté ici.
+### Export et interface
 
-L’Occlusion native n’est pas implémentée. Le modèle officiel Anki et ses exigences ont été examinés ; un simple marqueur ne fournit pas les masques. Le ZIP conserve le matériel pour une création manuelle dans un client compatible. L’OCR, les mises en page complexes et la restitution sémantique automatique à 100 % restent hors des garanties de cette version.
+Le moteur officiel **Anki 26.9.3**, installé dans un environnement séparé, importe réellement les trois paquets corrigés (16, 44 et 7 notes Basic), puis un paquet synthétique Cloze (1 note donnant 2 cartes). Les tests vérifient les champs, numéros, médias et le rendu recto/verso via Anki ; les réponses masquées du Cloze sont absentes du texte visible de la question et présentes dans la réponse.
+
+Les contrôles SQLite, modèles (question **et réponse**), champs, archives et médias de l’application passent. Les tests Streamlit vérifient l’édition, les changements de carte, la validation, l’export partiel, l’invalidation des téléchargements et la récupération unique du titre source. `pip check`, Ruff (`F,E9`) et `git diff --check` passent.
+
+Le serveur Streamlit avait été démarré et sa santé HTTP vérifiée pendant la préparation précédente. La revue courante ajoute les parcours AppTest ; elle ne prétend pas avoir redémarré ou déployé le site public.
+
+## Corrections manuelles restantes
+
+Six Basic contiennent une affirmation complète prise comme recto et aucun verso distinct :
+
+- **Biologie nº 16, 17, 18, 54** : Polymère, Déshydratation, hydrolyse, Symbiose.
+- **Anthropologie nº 7, 8** : paragraphe sur la nature domestique et paragraphe Écrit « Par delà nature et culture ».
+
+Elles ne sont plus exportées en tant que réponses vides. Leur texte reste intact. Dans l’éditeur, choisir un titre/concept pertinent, cocher « Replacer aussi le titre source au début du verso », enregistrer, comparer et revalider. Le moteur ne fabrique pas de question à partir d’une affirmation.
+
+Les 4 Cloze sources n’indiquent pas les mots à masquer : elles nécessitent des suppressions explicites. Les 8 Occlusions ne sont pas des exports natifs ; le ZIP conserve toutes les sources.
+
+## Non vérifié / non garanti
+
+- Safari sur un vrai iPad, téléchargements et disposition sur cet appareil.
+- Rendu graphique dans le client Anki iPad effectivement utilisé ; l’import et le rendu HTML du moteur officiel ont été testés, pas son navigateur embarqué.
+- Reconnaissance des mots inscrits dans les pixels des images, ni lisibilité parfaite de toutes les petites annotations après compression.
+- Identité visuelle des copies compressées avec les deux fichiers initiaux trop volumineux.
+- Justesse sémantique automatique de tous les titres parents : elle reste à confirmer visuellement ; ni les comptages ni le second lecteur ne la prouvent.
+- Résultats de la nouvelle CI distante : les commandes passent localement ; les PDF privés ne sont pas dans GitHub.
+
+Versions locales : Python 3.12.14, Streamlit 1.66.1, PyMuPDF 1.28.2, genanki 0.13.1, Anki 26.9.3. La suite précédente de 45 tests et ses exports de 73 Basic étaient insuffisants pour conclure à des cartes utilisables : six réponses vides y passaient. Les résultats de ce rapport remplacent cette conclusion.
