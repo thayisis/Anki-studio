@@ -42,7 +42,7 @@ def test_official_anki_import(filename, tmp_path):
         data = path.read_bytes()
     cards = parse_pdf(data)
     digest = hashlib.sha256(data).hexdigest()
-    payload, plan = build_apkg(cards, set(range(len(cards))), filename, digest)
+    payload, plan = build_apkg(cards, set(), filename, digest)
     package = tmp_path / "test.apkg"
     package.write_bytes(payload)
     expected = {

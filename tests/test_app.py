@@ -36,11 +36,11 @@ def test_ui_validation_partial_export_edit_invalidates_download_and_review():
     with patch("streamlit.file_uploader", return_value=upload()):
         at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py").run()
         assert not at.exception
-        assert button(at, "Préparer le paquet .apkg").disabled
+        assert not button(at, "Exporter les cartes valides en .apkg").disabled
         at.checkbox[-1].check().run()
         assert not at.exception
         assert at.session_state["validated"] == {0}
-        button(at, "Préparer le paquet .apkg").click().run()
+        button(at, "Exporter les cartes valides en .apkg").click().run()
         assert not at.exception
         assert at.session_state["apkg"][:2] == b"PK"
         at.text_area[0].set_value("Corrected title")
@@ -50,7 +50,7 @@ def test_ui_validation_partial_export_edit_invalidates_download_and_review():
         assert at.session_state["apkg"] is None
         assert at.session_state["edits"][0]["title"] == "Corrected title"
         assert not at.checkbox[-1].value
-        assert button(at, "Préparer le paquet .apkg").disabled
+        assert not button(at, "Exporter les cartes valides en .apkg").disabled
 
 
 def test_ui_switch_cards_keeps_reviews_independent_and_retains_empty_occlusion():
@@ -71,7 +71,7 @@ def test_ui_switch_cards_keeps_reviews_independent_and_retains_empty_occlusion()
         assert at.checkbox[-1].value
         at.checkbox[-1].uncheck().run()
         assert at.session_state["validated"] == {1}
-        assert button(at, "Préparer le paquet .apkg").disabled
+        assert not button(at, "Exporter les cartes valides en .apkg").disabled
 
 
 def test_ui_editor_changes_text_indentation_and_restores_source_title():
@@ -134,6 +134,6 @@ def test_real_reviewed_basic_and_cloze_can_be_validated_and_exported(
         assert at.text_area[0].value == expected_title
         assert at.checkbox[0].disabled  # Source already restored exactly once.
         at.checkbox[-1].check().run()
-        button(at, "Préparer le paquet .apkg").click().run()
+        button(at, "Exporter les cartes valides en .apkg").click().run()
         assert not at.exception and at.session_state["apkg"][:2] == b"PK"
         assert not at.error

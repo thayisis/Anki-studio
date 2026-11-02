@@ -90,7 +90,7 @@ def test_draw_review_download_and_invalidate_in_actual_streamlit(local_app, tmp_
             frame.locator("body[data-ready=true]").wait_for(timeout=20000)
             assert frame.locator("svg rect").count() == 0
             button = page.get_by_role(
-                "button", name="Préparer le paquet .apkg", exact=True
+                "button", name="Exporter les cartes valides en .apkg", exact=True
             )
             expect(button).to_be_disabled()
             frame.locator("#overlay").scroll_into_view_if_needed()

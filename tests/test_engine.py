@@ -33,7 +33,7 @@ def test_wrapped_body_and_new_bullets_remain_separate():
     texts = [b["text"] for b in c["blocks"]]
     assert texts == ["A long sentence", "continued here; exactly.", "Another point."]
     assert [b["bullet"] for b in c["blocks"]] == [True, False, True]
-    assert c["back"].count("<div ") == 3
+    assert c["back"].count("<div ") == 2
 
 
 def test_nested_levels_from_text_position_not_glyph():
@@ -326,7 +326,7 @@ def test_plain_indentation_outline_provides_parents_across_card_markers():
     ]:
         p.insert_text((x, y), t)
     cards = parse_pdf(doc.tobytes())
-    assert cards[1]["context"] == [
+    assert cards[1]["source_context"] == [
         "Parent concept",
         "Classification",
         "Mode of secretion",

@@ -121,7 +121,7 @@ def test_reference_marker_counts_and_no_text_loss(filename, expected):
         for e in c["source_elements"]:
             if e["kind"] != "text" or not e["text"]:
                 continue
-            assert e["text"] in c["title"] or any(
+            assert e["text"] in c["original_title"] or any(
                 e["text"] == without_cloze(b.get("text", "")) for b in c["blocks"]
             )
     payload, plan = build_apkg(
@@ -214,8 +214,12 @@ def test_real_histology_key_cards(index, title, expected_text, image_count):
         pytest.skip("Histology reference unavailable")
     cards = parse_pdf(path.read_bytes())
     c = cards[index]
-    assert c["title"] == title
-    text = [b for b in c["blocks"] if b["kind"] == "text" and b["text"]]
+    assert c["original_title"] == title
+    text = [
+        b
+        for b in c["blocks"]
+        if b["kind"] == "text" and b["text"] and not b.get("moved_definition")
+    ]
     assert [b["text"] for b in text] == expected_text
     assert len(c["media"]) == image_count
     images = [b for b in c["blocks"] if b["kind"] == "image"]
@@ -239,16 +243,14 @@ def test_real_histology_key_cards(index, title, expected_text, image_count):
             20.02,
         ]
     else:
-        assert c["context"] == [
-            cards[0]["title"],
-            "Classification et diagnostic :",
-            "Mode et nature de la sécrétion (*mode —> nature)",
-        ]
+        assert c["context"] == ["Mode et nature de la sécrétion (*mode —> nature)"]
         assert all(b["level"] == 0 and b["indent"] == 0 for b in text)
         linked = [b for b in c["blocks"] if b.get("image_association")]
         assert len(linked) == image_count
         # Orphan glyphs are displayed beside images, never as empty extra points.
-        assert c["back"].count("data-level=") == len(text)
+        assert c["back"].count("data-level=") == sum(
+            not b.get("continuation") for b in text
+        )
     if index == 2:
         assert [b["continuation"] for b in text] == [
             False,

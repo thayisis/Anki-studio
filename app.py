@@ -75,7 +75,7 @@ st.write(
     f"{counts['CARTE CLOZE']} Cloze · {counts['CARTE OCCLUSION']} Occlusion"
 )
 st.info(
-    "Comparez chaque carte au PDF avant validation. Les lignes et retraits sont conservés ; "
+    "Basic et Cloze : export immédiat après les contrôles automatiques. La revue individuelle est facultative. "
     "les titres incertains sont signalés. Une image ou une zone ambiguë n’est pas une carte perdue."
 )
 index = st.selectbox(
@@ -294,7 +294,7 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
         except (ValueError, TypeError) as error:
             st.error(str(error))
 
-st.subheader("Contrôle de fidélité")
+st.subheader("Revue de fidélité — facultative pour Basic et Cloze")
 is_io = card["type"] == "CARTE OCCLUSION"
 can_confirm = not is_io or ready_to_confirm(card)
 verify_key = "verified_" + prefix
@@ -334,22 +334,49 @@ st.write(f"{len(validated)} / {len(cards)} notes vérifiées.")
 st.subheader("Exporter vers Anki")
 st.write(
     f"**{plan['notes']} notes incluses → {plan['cards']} cartes Anki** · "
-    f"{len(plan['excluded'])} exclues · {plan['awaiting']} en attente de validation (parmi les exclues)"
+    f"{len(plan['excluded'])} exclues — consultez le tableau de correction"
 )
-if plan["excluded"]:
+if plan["warnings"]:
+    st.warning(
+        "Export avec avertissements : les contrôles automatiques ne garantissent pas la fidélité sémantique. Consultez le tableau de correction."
+    )
+if plan["excluded"] or plan["warnings"]:
     st.dataframe(
         [
-            {"Carte": e["index"] + 1, "Type": e["type"], "Motif": e["reason"]}
-            for e in plan["excluded"]
+            {
+                "Carte": e["index"] + 1,
+                "Type": e["type"],
+                "Statut": e["status"],
+                "Motif": e["reason"],
+            }
+            for e in [
+                dict(e, status="Exclue : correction nécessaire")
+                for e in plan["excluded"]
+            ]
+            + [
+                dict(
+                    w,
+                    type=cards[w["index"]]["type"],
+                    status="Exportée avec avertissement"
+                    if w["index"] in plan["included"]
+                    else "Avertissement sur carte exclue",
+                )
+                for w in plan["warnings"]
+            ]
         ],
         hide_index=True,
         use_container_width=True,
     )
 st.caption(
-    "Export partiel : seules les notes validées et compatibles sont incluses. "
+    "Les Basic et Cloze compatibles sont exportables immédiatement, sans validation individuelle. Les anomalies bloquantes sont exclues et signalées ; les autres sont exportées avec avertissements. "
     "Une note Cloze ou Occlusion peut produire plusieurs cartes. Seules les zones dessinées, prévisualisées et validées sont exportées au format natif ; les sources restent inchangées."
 )
-if st.button("Préparer le paquet .apkg", disabled=not plan["included"]):
+if st.button(
+    "Exporter toutes les cartes en .apkg"
+    if not plan["excluded"]
+    else "Exporter les cartes valides en .apkg",
+    disabled=not plan["included"],
+):
     try:
         payload, report = build_apkg(cards, validated, Path(uploaded.name).stem, digest)
         st.session_state.apkg = payload

@@ -39,7 +39,7 @@ def build_native_apkg(cards, plan, deck_name, digest, legacy_builder):
         (root / "input-media").mkdir()
         other = {i for i in plan["included"] if cards[i]["type"] != "CARTE OCCLUSION"}
         if other:
-            legacy, _ = legacy_builder(cards, other, deck_name, digest)
+            legacy, _ = legacy_builder(cards, other, deck_name, digest, selected=other)
             (root / "base.apkg").write_bytes(legacy)
         entries = []
         media = {}

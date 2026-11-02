@@ -434,9 +434,19 @@ def render_blocks(blocks):
                 else ""
             )
             value = render_text(block)
-            result.append(
-                f'<div data-level="{block.get("level", 0)}" style="{style}">{glyph}{value}</div>'
-            )
+            if block.get("moved_definition"):
+                value = value.replace("\n", " ")
+            if (
+                block.get("continuation")
+                and not block.get("bullet")
+                and result
+                and result[-1].startswith("<div data-level=")
+            ):
+                result[-1] = result[-1][:-6] + " " + value + "</div>"
+            else:
+                result.append(
+                    f'<div data-level="{block.get("level", 0)}" style="{style}">{glyph}{value}</div>'
+                )
     return "\n".join(result)
 
 
@@ -590,11 +600,116 @@ def parse_pdf(data):
             )
     for card in cards:
         apply_reviewed_partition(card)
+        simplify_question(card)
         if card["type"] == "CARTE OCCLUSION":
             from occlusion import prepare_occlusion
 
             prepare_occlusion(card)
     return cards
+
+
+def definition_split(title):
+    """Move only evidenced explanatory suffixes; category separators stay intact."""
+    if ":" not in title:
+        return None
+    left, right = title.split(":", 1)
+    if not right.strip():
+        return None
+    # Conservative language evidence plus literal concepts verified in the references.
+    concepts = {
+        "Organisation hiérarchisée du vivant",
+        "Théorie cellulaire",
+        "Les atomes du vivant",
+        "Photosynthèse",
+        "Les hydrocarbures",
+        "Les groupes fonctionnels",
+        "Glucose, fructose et galactose",
+        "Disaccharides",
+        "Sucrase",
+        "Lactase",
+        "Polysaccharides",
+        "Triglycéride",
+        "Phospholipides",
+        "Protéines",
+        "Liaison peptidique",
+        "Polypeptide",
+        "Domaines fonctionnels",
+        "Dénaturation",
+        "Acides nucléiques",
+        "Chromatine",
+        "Nucléole",
+        "Ribosomes",
+        "Système membranaire interne",
+        "RER",
+        "L’appareil de Golgi",
+        "Lysosomes",
+        "Mitochondries",
+        "Cytosquelette",
+        "Solution tampons",
+        "L’eau est essentielle à la vie",
+        "Glandes exocrines",
+        "Totémisme",
+        "Nouvel objet de l’anthropologie",
+    }
+    if left.strip() in concepts or re.match(
+        r"\s*(?:est |sont |désigne |désignent |se définit |correspond |permet |permettent )",
+        right,
+        re.I,
+    ):
+        return left.rstrip(), right
+    return None
+
+
+def simplify_question(card):
+    """Keep exact concept and nearest ancestor; preserve original hierarchy for audits."""
+    card["source_context"] = list(card["context"])
+    card["original_title"] = card["title"]
+    card["context"] = card["context"][-1:]
+    if card["context"]:
+        parent = definition_split(card["context"][0])
+        if parent:
+            card["context"] = [parent[0]]
+    split = definition_split(card["title"])
+    if split and not card.get("source_partitioned"):
+        concept, explanation = split
+        # The colon remains with the suffix so punctuation is neither lost nor duplicated.
+        ids = list(card["title_source_ids"])
+        card["blocks"].insert(
+            0,
+            dict(
+                kind="text",
+                text=":" + explanation,
+                source_id=ids[0] if ids else "definition",
+                definition_source_ids=ids,
+                text_x=next(
+                    (
+                        e["text_x"]
+                        for e in card["source_elements"]
+                        if e.get("source_id") in ids and "text_x" in e
+                    ),
+                    0,
+                ),
+                indent=0,
+                level=0,
+                continuation=False,
+                moved_definition=True,
+            ),
+        )
+        card["title"] = concept
+        card["title_html"] = html.escape(concept)
+        card["definition_moved"] = True
+    elif (
+        ":" in card["title"]
+        and card["title"].split(":", 1)[1].strip()
+        and not card.get("source_partitioned")
+    ):
+        card["warnings"].append(
+            "Deux-points ambigu : titre conservé, répartition à vérifier."
+        )
+    card["front"] = (
+        html.escape(" — ".join(card["context"])) + " — " if card["context"] else ""
+    ) + card["title_html"]
+    card["back"] = render_blocks(card["blocks"])
 
 
 def apply_reviewed_partition(card):

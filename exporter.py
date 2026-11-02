@@ -1,5 +1,6 @@
-"""Audited partial exports: validated Basic/native Cloze; source bundle for all cards."""
+"""Automatic export preflight, explicit warnings and independent occlusion readiness."""
 
+import math
 import hashlib
 import html
 import io
@@ -64,6 +65,62 @@ def fields_for(card):
 
 
 def export_reason(card):
+    try:
+        for block in card.get("blocks", []):
+            indent = float(block.get("indent", 0))
+            if not math.isfinite(indent) or not 0 <= indent <= 10000:
+                return "Hiérarchie invalide : retrait impossible."
+        media = dict(card["media"])
+        for name, raw in card["media"]:
+            if Path(name).name != name or not raw:
+                return "Média invalide ou vide."
+            if (
+                re.fullmatch(r"[a-f0-9]{64}\.png", name)
+                and hashlib.sha256(raw).hexdigest() + ".png" != name
+            ):
+                return "Média altéré : les pixels diffèrent de la source."
+        source_images = [
+            e["media_name"]
+            for e in card.get("source_elements", [])
+            if e["kind"] == "image"
+        ]
+        images = [
+            b["media_name"] for b in card.get("blocks", []) if b["kind"] == "image"
+        ]
+        if source_images != images:
+            return "Images sources manquantes ou ordre modifié."
+        if any(name not in media for name in images):
+            return "Média manquant."
+        return _export_reason(card)
+    except (ValueError, TypeError, KeyError) as error:
+        return "Structure non exportable : " + str(error)
+
+
+def content_warnings(card):
+    from reviewed_notes import without_cloze
+
+    warnings = list(card.get("warnings", []))
+    if card.get("source_elements"):
+        source = " ".join(
+            e.get("text", "") for e in card["source_elements"] if e["kind"] == "text"
+        )
+        body = " ".join(
+            b.get("text", "") for b in card.get("blocks", []) if b["kind"] == "text"
+        )
+        actual = body if card.get("source_partitioned") else card["title"] + " " + body
+        tokenize = lambda value: re.findall(r"\w+|[^\w\s]", without_cloze(value))
+        if tokenize(source) != tokenize(actual):
+            warnings.append(
+                "Texte modifié ou incomplet par rapport au PDF : comparer et corriger ; fidélité non validée."
+            )
+    if len(card.get("title", "")) > 180:
+        warnings.append(
+            "Notion longue ou ambiguë : titre exact conservé pour éviter une suppression de texte."
+        )
+    return list(dict.fromkeys(warnings))
+
+
+def _export_reason(card):
     if card["type"] == "CARTE OCCLUSION":
         from occlusion import export_issue
 
@@ -97,12 +154,10 @@ def export_reason(card):
     return None
 
 
-def export_plan(cards, validated):
+def export_plan(cards, validated=None):
     included, excluded = [], []
     for i, card in enumerate(cards):
         reason = export_reason(card)
-        if i not in validated:
-            reason = "En attente de validation." + (" " + reason if reason else "")
         if reason:
             excluded.append(dict(index=i, type=card["type"], reason=reason))
         else:
@@ -110,7 +165,12 @@ def export_plan(cards, validated):
     return dict(
         included=included,
         excluded=excluded,
-        awaiting=sum(i not in validated for i in range(len(cards))),
+        awaiting=0,
+        warnings=[
+            dict(index=i, reason=w)
+            for i, c in enumerate(cards)
+            for w in content_warnings(c)
+        ],
         notes=len(included),
         cards=sum(
             len({m["number"] for m in cards[i]["io"]["masks"]})
@@ -134,10 +194,19 @@ def build_apkg(cards, validated, deck_name, document_digest):
     return _build_legacy_apkg(cards, validated, deck_name, document_digest)
 
 
-def _build_legacy_apkg(cards, validated, deck_name, document_digest):
+def _build_legacy_apkg(cards, validated, deck_name, document_digest, *, selected=None):
     plan = export_plan(cards, validated)
+    if selected is not None:
+        plan["included"] = [i for i in plan["included"] if i in selected]
+        plan["notes"] = len(plan["included"])
+        plan["cards"] = sum(
+            len(cloze_numbers(fields_for(cards[i])[0]))
+            if cards[i]["type"] == "CARTE CLOZE"
+            else 1
+            for i in plan["included"]
+        )
     if not plan["included"]:
-        raise ValueError("Aucune note validée et exportable.")
+        raise ValueError("Aucune note exportable.")
     # One stable deck per source; independent documents cannot collide.
     deck_id = int(
         hashlib.sha256(("anki-studio:" + document_digest).encode()).hexdigest()[:12], 16

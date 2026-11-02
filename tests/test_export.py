@@ -63,13 +63,12 @@ def test_partial_export_basic_and_native_cloze_with_media(tmp_path):
     assert len(json.loads(z.read("media"))) == 1
 
 
-def test_validation_is_required_and_counts_are_exact():
-    plan = export_plan(sample(), {0})
-    assert (
-        plan["included"] == [0] and plan["awaiting"] == 2 and len(plan["excluded"]) == 2
-    )
-    with pytest.raises(ValueError, match="Aucune"):
-        build_apkg(sample(), set(), "Test", "x")
+def test_export_is_immediate_and_counts_are_exact():
+    plan = export_plan(sample(), set())
+    assert plan["included"] == [0, 1]
+    assert plan["awaiting"] == 0 and len(plan["excluded"]) == 1
+    payload, report = build_apkg(sample(), set(), "Test", "x")
+    assert payload.startswith(b"PK") and report["notes"] == 2
 
 
 @pytest.mark.parametrize(

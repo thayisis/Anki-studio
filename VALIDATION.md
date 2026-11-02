@@ -1,10 +1,19 @@
-# Validation après revue critique — 1 novembre 2026
+# Validation après revue critique — 2 novembre 2026
 
 Branche : `fix/pdf-conversion`. Aucune fusion et aucun déploiement. La revue détaillée est dans [REVIEW.md](REVIEW.md).
 
+## Corrections V9 après essai Safari iPad
+
+- Rectos : notion exacte et au plus le parent immédiat ; hiérarchie complète conservée dans `source_context`. Les notions ambiguës longues ne sont pas résumées arbitrairement et sont signalées.
+- Définitions : les suffixes explicatifs reconnus passent une seule fois au début du verso ; les mots et la ponctuation sont comparés à la source. Un séparateur de catégories n’est pas déplacé automatiquement. Classification prudente, limitée aux preuves lexicales et aux notions vérifiées des cours ; les autres cas sont avertis.
+- Apocrine : comparaison visuelle directe du recadrage du PDF d’histologie ; cinq puces textuelles distinctes, phrase mucine réunie en un paragraphe, deux images dans l’ordre. Les lignes et niveaux physiques restent dans les données et sont vérifiés indépendamment avec Poppler.
+- Export : 16 notes Histologie, 51 Biologie et 10 Anthropologie immédiatement, sans validation individuelle ; total 73 Basic + 4 Cloze. Import de ces paquets avec le moteur officiel Anki, vérification des champs, questions/réponses, suppressions et pixels. Les huit Occlusions non préparées restent exclues explicitement sans bloquer ces 77 notes. L’export complet des huit Occlusions reste testé avec des masques de contrôle uniquement.
+- Précontrôle : contenu comparé en séquence de mots et ponctuation, images sources présentes dans l’ordre, hash des médias, retraits finis, verso non vide et syntaxe Cloze. Modifications/incomplétudes textuelles signalées comme fidélité non validée ; structure, images manquantes/altérées, verso vide et suppression absente bloquent seulement la note concernée.
+- Les contrôles embarqués Basic/Cloze vérifient SQLite, modèles et médias ; l’import avec le moteur officiel est exécuté dans les tests. L’export mixte natif utilise aussi ce moteur et un réimport lors de l’export.
+
 ## Résultats réellement exécutés
 
-**115 tests réussis, aucun échec, aucun test ignoré**, avec les trois PDF et l’interpréteur Anki officiel activés :
+**123 tests réussis, aucun échec, aucun test ignoré**, avec les trois PDF et l’interpréteur Anki officiel activés :
 
 ```sh
 ANKI_REFERENCE_DIR=/workspace/.anki-studio/reference-pdfs \
@@ -31,7 +40,7 @@ Les espaces typographiques et les coupures physiques de ligne ne constituent pas
 
 ### Retraits, images et titres
 
-Les coordonnées du premier mot de chaque ligne sont comparées à Poppler ; les marges et niveaux sont lus dans le HTML rendu, pas uniquement dans le JSON. Les niveaux observés sont 0–4 en histologie et 0–3 dans les deux autres documents. Les puces séparées et les lignes enveloppées restent distinctes ; les glyphes de puces sont normalisés en HTML sans transformer un vrai ® dans le contenu.
+Les coordonnées du premier mot de chaque ligne sont comparées à Poppler ; les marges et niveaux sont lus dans le HTML rendu, pas uniquement dans le JSON. Les niveaux observés sont 0–4 en histologie et 0–3 dans les deux autres documents. Les puces distinctes restent séparées ; les lignes de continuation géométrique sont réunies dans le même paragraphe HTML, sans modifier les lignes de provenance ; les glyphes de puces sont normalisés en HTML sans transformer un vrai ® dans le contenu.
 
 Les 93 placements d’images sont comptabilisés et comparés aux PDF ; leur ordre est contrôlé dans le HTML. Les médias des exports Basic sont importés dans Anki et comparés par SHA-256 : 49 fichiers uniques pour l’histologie, 34 pour la biologie (une image répétée partage son fichier), aucun pour les Basic d’anthropologie. Les images des Occlusions restent dans les sources et les aperçus.
 
@@ -51,7 +60,7 @@ Un serveur Streamlit uniquement local est démarré automatiquement par les test
 
 Les six Basic anciennement exclues (Biologie 16/17/18/54 et Anthropologie 7/8) sont maintenant réparties en concepts littéraux au recto et passages complets au verso, sans mot supprimé, ajouté ou corrigé. Les dix passages sont reconnus par leur texte complet et leur type via des recettes explicites, sans dépendre du nom du PDF ni du numéro de carte. Les passages différents ne sont pas réécrits par ces recettes.
 
-Les quatre Cloze utilisent chacune `c1` : **un apport continu d’énergie**, **changements évolutifs**, **l’endosymbiose**, **sous-cultures**. Ces cibles sont des choix pédagogiques proposés, littéraux et modifiables ; les PDF ne contenaient pas d’annotations de suppression. Le champ natif `Text` contient seulement le passage annoté, sans titre supplémentaire qui révèlerait la réponse. L’égalité stricte entre verso démasqué et lignes PDF est testée pour les dix cas, espaces et ponctuation inclus. Les modifications doivent toujours être validées par l’utilisateur avant export.
+Les quatre Cloze utilisent chacune `c1` : **un apport continu d’énergie**, **changements évolutifs**, **l’endosymbiose**, **sous-cultures**. Ces cibles sont des choix pédagogiques proposés, littéraux et modifiables ; les PDF ne contenaient pas d’annotations de suppression. Le champ natif `Text` contient seulement le passage annoté, sans titre supplémentaire qui révèlerait la réponse. L’égalité entre les mots et la ponctuation du verso démasqué et du PDF est testée pour les dix cas ; seuls les espaces des retours de ligne physiques sont normalisés. La validation individuelle Basic/Cloze est désormais facultative.
 
 Voir [CARD_CORRECTIONS.md](CARD_CORRECTIONS.md) pour les rectos et cibles exacts. Les transformations sont aussi exercées sur des PDF synthétiques Unicode en CI.
 

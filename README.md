@@ -7,17 +7,17 @@ Application Streamlit gratuite pour convertir des PDF balisés en notes Anki, av
 1. Importer un PDF contenant des marqueurs textuels `CARTE`, `CARTE CLOZE` ou `CARTE OCCLUSION` sur des lignes distinctes.
 2. Comparer chaque note au PDF : titre, phrases complètes, retraits, images et ordre. Une note peut couvrir plusieurs pages.
 3. Corriger le titre et les sections parentes en texte simple. Le tableau du verso permet de corriger chaque ligne, sa puce et son retrait sans écrire de HTML. Les images restent en place. « Replacer aussi le titre source au début du verso » permet de récupérer un premier paragraphe pris pour titre.
-4. Valider les notes individuellement. Toute correction annule leur validation et l’ancien téléchargement.
-5. Exporter les notes **validées et compatibles**. Les autres sont listées avec leur motif d’exclusion. Les compteurs distinguent notes, cartes Anki générées et notes en attente.
+4. Consulter le tableau de correction. La revue individuelle Basic/Cloze est facultative ; seules les zones Occlusion exigent une préparation et une validation manuelles. Toute correction annule l’ancien téléchargement.
+5. Exporter immédiatement toutes les notes compatibles, avec avertissements explicites si nécessaire. Les notes impossibles à exporter sont exclues individuellement et listées avec leur motif.
 6. Télécharger aussi le dossier source ZIP pour conserver le PDF original, toutes les notes (y compris exclues), les coordonnées, les images et les zones PDF.
 
 ### Basic et Cloze
 
-Les Basic utilisent les champs natifs `Front` / `Back`. Un verso vide (ou ne contenant que des puces sans texte ni image) est explicitement exclu, même après validation. Corriger le titre et utiliser la récupération du titre source au verso avant de revalider ; cette récupération ne peut pas dupliquer le texte lors d’enregistrements successifs. Les titres distincts ne sont pas recopiés inutilement au verso. Pour une définition isolée, le mot-concept du recto peut aussi figurer dans la phrase complète au verso afin de préserver son libellé original.
+Les Basic utilisent les champs natifs `Front` / `Back`. Un verso vide (ou ne contenant que des puces sans texte ni image) est explicitement exclu, même après validation. Corriger le titre et utiliser la récupération du titre source au verso avant de réexporter ; cette récupération ne peut pas dupliquer le texte lors d’enregistrements successifs. Les titres distincts ne sont pas recopiés inutilement au verso. Pour une définition isolée, le mot-concept du recto peut aussi figurer dans la phrase complète au verso afin de préserver son libellé original.
 
 Les Cloze utilisent un modèle natif Anki de type Cloze (`Text` / `Extra`, filtre `{{cloze:Text}}`). Le marqueur `CARTE CLOZE` ne précise pas les mots à masquer. Les quatre passages des cours fournis ont maintenant des suppressions littérales proposées et modifiables (voir [CARD_CORRECTIONS.md](CARD_CORRECTIONS.md)). Pour les autres passages, l’utilisateur peut saisir `{{c1::texte}}`, `{{c2::autre texte::indice}}`, etc. dans le titre ou une ligne. Les suppressions vides, incomplètes ou imbriquées sont refusées explicitement. Un même numéro produit une seule carte ; plusieurs numéros produisent plusieurs cartes.
 
-L’export ne laisse jamais une Occlusion ou une Cloze incomplète bloquer les Basic validées. Chaque archive produite est contrôlée avant téléchargement : base SQLite, nombre de notes/cartes, types des modèles, noms des champs, rectos/versos, numéros de Cloze et contenu exact des médias.
+La validation individuelle Basic/Cloze est facultative. L’export ne laisse jamais une Occlusion ou une Cloze incomplète bloquer les Basic exportables. Chaque archive produite est contrôlée avant téléchargement : base SQLite, nombre de notes/cartes, types des modèles, noms des champs, rectos/versos, numéros de Cloze et contenu exact des médias.
 
 ### Image Occlusion native
 
@@ -29,6 +29,14 @@ Un export mixte utilise le moteur officiel Anki dans un processus isolé, avec v
 
 Voir [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md) pour les huit schémas, la validation, le format et les limites. **Le toucher émulé Chromium est testé ; Safari sur un vrai iPad et l’Apple Pencil physique ne le sont pas.**
 
+## Export immédiat et présentation (V9)
+
+Après conversion, utiliser « Exporter toutes les cartes en .apkg ». Sans case à cocher pour Basic/Cloze, les trois cours donnent immédiatement 73 Basic et 4 Cloze. Les huit Occlusions restent exclues tant que leurs masques manuels ne sont pas préparés, prévisualisés et validés. Une Occlusion sans masque n’est jamais annoncée prête à étudier.
+
+Le tableau de correction distingue les exclusions bloquantes des avertissements. Un verso vide, une Cloze sans suppression, une image manquante/altérée, un ordre d’images modifié ou un retrait invalide exclut uniquement la note concernée. Un texte modifié ou incomplet est explicitement signalé, jamais certifié fidèle. Si des notes sont exclues, utiliser « Exporter les cartes valides en .apkg » ; les autres anomalies restent visibles comme avertissements. Le ZIP conserve toutes les sources.
+
+Le recto garde la notion exacte et au plus le parent immédiat ; la hiérarchie complète reste dans `source_context`. Les définitions après deux-points identifiées avec preuve lexicale ou dans les notions vérifiées des cours passent en tête du verso, avec leur ponctuation originale. Les séparateurs de catégories ne sont pas déplacés. Les deux-points ambigus restent en place avec un avertissement : ce classement prudent n’est pas une analyse sémantique universelle.
+
 ## Extraction et limites
 
 Le moteur est séparé en étapes dans `engine.py` : extraction des caractères/coordonnées/images, détection globale des limites, association des puces séparées, identification prudente des titres, niveaux selon la position horizontale du **texte**, association des images, puis HTML. `exporter.py` gère l’éligibilité, les archives Anki et la sauvegarde des sources.
@@ -36,7 +44,7 @@ Le moteur est séparé en étapes dans `engine.py` : extraction des caractères/
 - Chaque marqueur donne une entrée, même vide ou composée uniquement d’images. Une entrée sans titre nécessite une correction.
 - Le texte extrait n’est ni résumé, ni traduit, ni corrigé. Les caractères `®`, `©`, etc. ne sont plus supprimés. Les glyphes Wingdings reconnus comme puces peuvent être traités comme tels.
 - Les caractères plus petits ou décalés (notamment le petit « 2 » de la formule O2 du PDF de biologie) conservent leurs tailles et positions relatives en HTML, sans réécriture de leurs caractères. Si le texte de la ligne est corrigé, les anciennes tailles ne sont pas appliquées au nouveau texte : vérifier les indices/exposants après édition.
-- Les lignes physiques restent distinctes au verso. Une continuation géométriquement probable est marquée dans les données ; on ne fusionne pas des puces successives. Les retraits PDF restent visibles, sans limite à trois niveaux.
+- Les lignes physiques restent séparées dans les données source. Les continuations géométriques sont réunies dans un même paragraphe HTML ; deux puces successives ne sont jamais fusionnées. Les retraits PDF restent visibles, sans limite à trois niveaux.
 - Seuls des titres avec preuve typographique ou un plan de puces établi par les retraits peuvent donner du contexte ; les phrases précédentes ne sont pas utilisées arbitrairement. Le premier paragraphe et les parents proposés doivent être confirmés. La structure sémantique ne peut pas être garantie automatiquement.
 - Images et schémas vectoriels sont conservés dans l’ordre géométrique, avec leurs transformations et superpositions visibles. Un média très volumineux est limité à 16 mégapixels avec avertissement. Le PDF original est conservé dans le ZIP.
 - Les colonnes, rotations, superpositions et puces isolées sont signalées lorsqu’elles sont détectées. L’ordre géométrique n’est pas une garantie d’ordre sémantique pour tous les documents.

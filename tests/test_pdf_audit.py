@@ -145,7 +145,11 @@ def test_poppler_word_order_punctuation_indentation_and_rendered_images(filename
         assert [
             (b["page"], b["bbox"][1], b["bbox"][0]) for b in image_blocks
         ] == sorted((b["page"], b["bbox"][1], b["bbox"][0]) for b in image_blocks)
-        body_text = [b for b in card["blocks"] if b["kind"] == "text" and b["text"]]
+        body_text = [
+            b
+            for b in card["blocks"]
+            if b["kind"] == "text" and b["text"] and not b.get("moved_definition")
+        ]
         anchors = [first_x[b["source_id"]] for b in body_text] + [
             b["bbox"][0] for b in image_blocks
         ]
@@ -162,6 +166,7 @@ def test_poppler_word_order_punctuation_indentation_and_rendered_images(filename
             for b in card["blocks"]
             if b["kind"] == "text"
             and not (b.get("image_association") and not b.get("text"))
+            and not b.get("continuation")
         ]
         assert len(rendered.rows) == len(text_blocks)
         for row, block in zip(rendered.rows, text_blocks):
