@@ -1,6 +1,6 @@
 # Image Occlusion native — éditeur et export intégrés
 
-Les huit notes Occlusion des PDF sont maintenant prises en charge par l’éditeur web et le modèle natif officiel Anki. **Aucune zone n’est prédéfinie** dans le code des cours : l’utilisateur dessine les rectangles et valide chaque carte générée.
+Les huit notes Occlusion des PDF sont maintenant prises en charge par l’éditeur web et le modèle natif officiel Anki. **Aucune zone n’est prédéfinie** dans le code des cours : l’utilisateur dessine les rectangles. La revue individuelle est facultative ; son absence est signalée.
 
 ## Utilisation dans le navigateur
 
@@ -8,8 +8,8 @@ Les huit notes Occlusion des PDF sont maintenant prises en charge par l’édite
 2. Utiliser **Dessiner**, puis faire glisser le doigt, le Pencil ou la souris. Utiliser **Déplacer / redimensionner** et les poignées pour ajuster les rectangles. Annuler/rétablir, supprimer une zone et effacer toutes les zones sont disponibles.
 3. Utiliser **Défiler** et le zoom pour naviguer dans une grande image. Les coordonnées sont normalisées sur l’image, indépendamment du zoom, de la largeur du navigateur et de l’orientation.
 4. Choisir le numéro de carte Anki d’un rectangle. Plusieurs rectangles de même numéro forment une carte ; des numéros différents donnent plusieurs cartes.
-5. Afficher **Aperçu masqué** pour chaque numéro, puis vérifier sa case de validation sous l’éditeur. **Révéler** et **Image seule** montrent les réponses et la source intacte.
-6. Valider la fidélité de la note puis préparer le `.apkg`. Une carte non prévisualisée ou non validée ne peut pas être exportée. Toute modification des rectangles, de leurs numéros ou du contenu annule la validation et l’ancien téléchargement.
+5. Facultativement, afficher **Aperçu masqué** pour chaque numéro, puis vérifier sa case de revue sous l’éditeur. **Révéler** et **Image seule** montrent les réponses et la source intacte.
+6. Préparer le `.apkg` dès que les masques sont terminés. Aucun clic de validation individuelle n’est obligatoire ; les masques non revus restent signalés. Pendant un geste de modification, l’export de cette note est suspendu. Toute modification annule la revue et l’ancien téléchargement ; un nouveau paquet peut être généré après la fin du geste. Une image sans masque n’est jamais exportée comme fausse Occlusion.
 
 Le composant est local, sans bibliothèque JavaScript chargée depuis un tiers. Il utilise SVG et Pointer Events, avec capture du pointeur et gestion de `pointercancel`. La vue de défilement évite de dessiner pendant la navigation. Limites : 500 rectangles et 99 numéros par note ; tailles minimales de 8 pixels à l’écran (zoomer pour les petites légendes).
 
@@ -28,7 +28,7 @@ Le composant est local, sans bibliothèque JavaScript chargée depuis un tiers. 
 
 Les images extraites non masquées restent inchangées. Une image unique est réutilisée byte pour byte comme base native. Pour Biologie 15, un canevas non masqué compose les deux images selon leurs positions et leur espacement PDF ; les deux fichiers extraits originaux sont aussi conservés dans le paquet et accessibles dans un volet du verso. Les masques restent des formes séparées : aucun rectangle n’est peint dans les pixels.
 
-Le PDF original, les images et le manifeste des masques sont conservés dans le ZIP source. Les coordonnées sont liées au hash du canevas ; une image modifiée ne peut pas réutiliser une validation précédente. La composition multi-image actuelle concerne une page PDF ; une note Occlusion à images réparties sur plusieurs pages est conservée avec avertissement et n’est pas exportée automatiquement.
+Le PDF original, les images et le manifeste des masques sont conservés dans le ZIP source et dans le nouveau projet ZIP réimportable. Le réimport du projet réinitialise la revue facultative mais conserve les masques. Les coordonnées sont liées au hash du canevas ; une image modifiée ne peut pas réutiliser une validation précédente. La composition multi-image actuelle concerne une page PDF ; une note Occlusion à images réparties sur plusieurs pages est conservée avec avertissement et n’est pas exportée automatiquement.
 
 ## Export réellement natif
 
@@ -45,12 +45,14 @@ Si seules des Basic/Cloze sont incluses, leur chemin d’export précédent rest
 
 Références officielles : [modèle](https://github.com/ankitects/anki/blob/main/rslib/src/image_occlusion/notetype.rs), [formes et propriétés](https://github.com/ankitects/anki/blob/main/rslib/src/image_occlusion/imageocclusion.rs).
 
-## Vérifications exécutées
+## Vérifications historiques sur les cours
+
+Les PDF privés ne sont pas présents dans le nouvel environnement du 12 novembre 2026. Les résultats de cours ci-dessous sont conservés de la revue précédente ; les contrôles synthétiques actuels et leurs limites figurent dans [VALIDATION.md](VALIDATION.md).
 
 - Les huit notes réelles sont d’abord vérifiées **sans aucun masque initial**.
 - Les tests leur attribuent explicitement des rectangles géométriques **de contrôle uniquement**, simulent aperçu/validation et exportent les trois documents : **73 Basic, 4 Cloze et 8 notes Occlusion**. Ces rectangles de test ne sont ni préchargés dans l’application ni proposés comme réponses pédagogiques.
 - Le moteur officiel importe les huit notes puis modifie leur masque via `update_image_occlusion_note()` ; l’image reste identique et les formes demeurent natives et éditables.
-- Regroupement de rectangles, numéros distincts, refus d’export avant revue, modification en cours, changement d’image, événements répétés/périmés et messages rapprochés sont couverts.
+- Regroupement de rectangles, numéros distincts, export sans revue avec avertissement, modification en cours, changement d’image, événements répétés/périmés et messages rapprochés sont couverts.
 - Chromium teste le toucher émulé (dessiner, déplacer, redimensionner, défiler), les événements de stylet synthétiques, l’annulation, le regroupement, le zoom et le changement de largeur.
 - Un vrai serveur Streamlit local teste l’import PDF, le composant, l’aperçu, les validations, le téléchargement et son invalidation après modification. Le changement de carte doit préserver les zones enregistrées et laisser une nouvelle note vierge.
 

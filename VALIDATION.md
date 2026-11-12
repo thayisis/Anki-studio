@@ -1,3 +1,46 @@
+# Validation du workflow manuel — 12 novembre 2026
+
+Branche reprise : `fix/pdf-conversion`, à partir de `dab7189` et des modifications existantes de la PR #1. Aucun déploiement, aucune fusion, aucune modification de `main`.
+
+## Résultat dans le nouvel environnement
+
+**120 tests réussis, 32 ignorés, aucun échec** :
+
+```sh
+ANKI_TEST_PYTHON=/workspace/.venvs/anki-studio/bin/python \
+  /workspace/.venvs/anki-studio/bin/python -m pytest -q -rs
+```
+
+Les 32 tests ignorés nécessitent les PDF privés d’anthropologie, de biologie ou d’histologie, absents de cet environnement. L’interpréteur Anki officiel est disponible ; les tests natifs synthétiques, y compris le réimport et l’éditabilité des masques, ont été exécutés. Les anciens résultats sur les 85 notes réelles ci-dessous sont **historiques, pas une nouvelle validation des cours**.
+
+Les vérifications `pip check`, Ruff (`F,E9`) et `git diff --check` passent.
+
+## Parcours effectivement vérifiés
+
+- Reprise du moteur d’extraction et des modèles natifs existants, sans repartir de zéro.
+- PDF synthétique d’histologie : critères de reconnaissance, puces imbriquées, continuation de paragraphe, deux images intercalées, définition déplacée et puce explicative seule. Tous les anciens blocs du verso, retraits, textes source et octets des médias restent identiques après correction JSON ; seul un titre source manquant peut être ajouté en préfixe, une seule fois.
+- JSON léger sans pixels, sans PDF et sans base64 ; identifiants égaux aux GUID Anki existants. Prompt en français pour questions, définitions et contexte d’histologie. La réponse de ChatGPT est simulée : aucun service d’IA n’est appelé par les tests ou l’application.
+- Refus atomique des réponses pour un autre document/lot, identifiant inconnu/répété, clés répétées, lot incomplet, versos/HTML injectés, valeur booléenne incorrecte, recto vide Basic et suppression Cloze modifiée. Les modifications locales et les réponses périmées sont détectées ; des lots indépendants peuvent être appliqués sans écraser les autres cartes.
+- Projet ZIP versionné : réouverture dans une nouvelle session avec PDF, corrections, médias, masques et lot actif, y compris retour de la réponse ChatGPT après fermeture. Vérification des sources, refus des médias altérés, métadonnées source falsifiées, chemins dangereux, entrées répétées, versions inconnues et projets trop volumineux. Taille maximale : 200 Mo compressés et décompressés.
+- Export immédiat sans cases de validation obligatoires pour tous les types. Masques absents, syntaxe Cloze invalide et verso vide restent des exclusions explicites ; une modification d’occlusion en cours suspend l’export jusqu’à son engagement. Les zones non revues donnent un avertissement. Aucun masque automatique ni image aplatie présentée comme Occlusion native.
+- Export mixte après correction et réouverture : **4 notes / 5 cartes**, Basic, Cloze (deux numéros) et Image Occlusion native, contrôlé par le moteur officiel et son réimport. Export sans IA conservé.
+- Vrai serveur Streamlit local dans Chromium : import PDF, mode manuel, téléchargement du JSON, collage et application de la réponse, téléchargement `.apkg`, téléchargement du projet et réouverture dans une nouvelle page. Viewport 820 × 1180, tactile émulé. L’éditeur d’occlusion reste testé pour dessin, aperçu, changement de note et invalidation du téléchargement pendant une retouche.
+
+## Limites actuelles
+
+- Le cours réel d’histologie n’a pas pu être rejoué. Un nouveau test optionnel du parcours manuel sur ses 16 cartes et 49 images attend `ANKI_REFERENCE_DIR` ; les contrôles réels antérieurs sont conservés.
+- Safari sur un vrai iPad et Apple Pencil physiques ne sont pas testés ici. Chromium tactile ne prouve pas leur comportement exact.
+- La qualité sémantique des questions proposées par ChatGPT n’est pas certifiée ; le texte des versos est protégé contre sa réécriture. Les images ne sont pas envoyées à ChatGPT et aucun diagnostic visuel n’est inventé.
+- Pas d’OCR. Les limites documentées du décodage PDF, de l’ordre de lecture et de la résolution des grandes images restent applicables ; aucune garantie universelle de fidélité à 100 %.
+- Le ZIP source historique reste un dossier d’audit ; seul le nouveau ZIP contenant `project.json` peut être réimporté comme projet. Le réimport relit le PDF avec le moteur courant ; une évolution incompatible d’extraction ou de format peut demander une migration future.
+- Un seul lot ChatGPT actif à la fois. Le projet conserve le lot actif, pas un historique de conversations. Les gestes de revue facultative d’occlusion sont réinitialisés au réimport, les masques sont conservés.
+
+---
+
+## Historique de validation de la PR avant ce nouvel environnement
+
+Les sections suivantes sont conservées comme compte rendu antérieur. Leurs chiffres et contraintes de validation individuelle ne décrivent pas la nouvelle exécution ci-dessus.
+
 # Validation après revue critique — 2 novembre 2026
 
 Branche : `fix/pdf-conversion`. Aucune fusion et aucun déploiement. La revue détaillée est dans [REVIEW.md](REVIEW.md).

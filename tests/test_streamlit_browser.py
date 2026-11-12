@@ -108,6 +108,7 @@ def test_draw_review_download_and_invalidate_in_actual_streamlit(local_app, tmp_
             )
             group = page.get_by_label(group_label, exact=True)
             expect(group).to_be_disabled()
+            expect(button).to_be_enabled(timeout=15000)
             frame.locator("#question").click()
             expect(group).to_be_enabled(timeout=15000)
             page.get_by_text(group_label, exact=True).click()
@@ -135,12 +136,26 @@ def test_draw_review_download_and_invalidate_in_actual_streamlit(local_app, tmp_
             page.get_by_role("combobox").first.click()
             page.get_by_role("combobox").first.press("ArrowDown")
             page.get_by_role("combobox").first.press("Enter")
-            frame.locator("body[data-ready=true]").wait_for()
+            # Streamlit briefly retains the outgoing iframe during a rerun.
+            # Wait for one settled frame with the expected note's mask count.
+            page.wait_for_function("""() => {
+                const frames = document.querySelectorAll('iframe[title*="anki_occlusion_editor"]');
+                if (frames.length !== 1) return false;
+                const doc = frames[0].contentDocument;
+                return doc?.querySelector('body[data-ready=true]') &&
+                    doc.querySelectorAll('svg rect[data-mask]').length === 0;
+            }""")
             expect(frame.locator("svg rect")).to_have_count(0)
             page.get_by_role("combobox").first.click()
             page.get_by_role("combobox").first.press("ArrowUp")
             page.get_by_role("combobox").first.press("Enter")
-            frame.locator("body[data-ready=true]").wait_for()
+            page.wait_for_function("""() => {
+                const frames = document.querySelectorAll('iframe[title*="anki_occlusion_editor"]');
+                if (frames.length !== 1) return false;
+                const doc = frames[0].contentDocument;
+                return doc?.querySelector('body[data-ready=true]') &&
+                    doc.querySelectorAll('svg rect[data-mask]').length === 1;
+            }""")
             expect(frame.locator("svg rect[data-mask]").first).to_be_attached()
             expect(page.get_by_label(overall, exact=True)).to_be_checked()
             # Any new geometry must disable export and remove the old download.
@@ -154,8 +169,9 @@ def test_draw_review_download_and_invalidate_in_actual_streamlit(local_app, tmp_
             page.mouse.move(
                 box["x"] + 0.8 * box["width"], box["y"] + 0.35 * box["height"], steps=8
             )
-            page.mouse.up()
             expect(button).to_be_disabled(timeout=15000)
+            page.mouse.up()
+            expect(button).to_be_enabled(timeout=15000)
             expect(link).to_have_count(0)
             # The component must not grow on every height/resize acknowledgement.
             height = page.locator(

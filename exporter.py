@@ -113,6 +113,15 @@ def content_warnings(card):
             warnings.append(
                 "Texte modifié ou incomplet par rapport au PDF : comparer et corriger ; fidélité non validée."
             )
+    io_state = card.get("io", {})
+    if io_state.get("masks") and (
+        io_state.get("verified") is None
+        or set(io_state.get("reviewed", []))
+        != {m.get("number") for m in io_state["masks"]}
+    ):
+        warnings.append(
+            "Zones d’occlusion non revues : vérifier les masques et les numéros dans l’aperçu."
+        )
     if len(card.get("title", "")) > 180:
         warnings.append(
             "Notion longue ou ambiguë : titre exact conservé pour éviter une suppression de texte."

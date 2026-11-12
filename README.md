@@ -2,14 +2,20 @@
 
 Application Streamlit gratuite pour convertir des PDF balisés en notes Anki, avec comparaison au document original. Utilisation dans un navigateur, notamment Safari sur iPad ; aucune installation locale n’est nécessaire pour l’utilisateur de l’application hébergée.
 
-## Workflow
+## Workflow gratuit PDF → ChatGPT manuel → Anki
 
-1. Importer un PDF contenant des marqueurs textuels `CARTE`, `CARTE CLOZE` ou `CARTE OCCLUSION` sur des lignes distinctes.
-2. Comparer chaque note au PDF : titre, phrases complètes, retraits, images et ordre. Une note peut couvrir plusieurs pages.
-3. Corriger le titre et les sections parentes en texte simple. Le tableau du verso permet de corriger chaque ligne, sa puce et son retrait sans écrire de HTML. Les images restent en place. « Replacer aussi le titre source au début du verso » permet de récupérer un premier paragraphe pris pour titre.
-4. Consulter le tableau de correction. La revue individuelle Basic/Cloze est facultative ; seules les zones Occlusion exigent une préparation et une validation manuelles. Toute correction annule l’ancien téléchargement.
-5. Exporter immédiatement toutes les notes compatibles, avec avertissements explicites si nécessaire. Les notes impossibles à exporter sont exclues individuellement et listées avec leur motif.
-6. Télécharger aussi le dossier source ZIP pour conserver le PDF original, toutes les notes (y compris exclues), les coordonnées, les images et les zones PDF.
+1. Importer un PDF avec les marqueurs textuels `CARTE`, `CARTE CLOZE` ou `CARTE OCCLUSION`, ou réouvrir un **projet Anki Studio ZIP** créé par cette version.
+2. Choisir **Sans IA** pour garder les rectos extraits et utiliser l’éditeur existant, ou **ChatGPT manuel (gratuit)** pour préparer un lot de cartes. Aucun compte/API payant ni clé n’est requis par l’application.
+3. Choisir la première carte et le nombre de cartes du lot, puis **Générer le JSON et le prompt**. Copier le prompt via le bouton de copie du bloc, puis le coller dans ChatGPT. Le JSON léger garde les textes, les puces, les continuations et les retraits ; ni PDF, ni pixels, ni base64 ne sont envoyés. Les images restent dans Anki Studio et dans le projet. Les textes copiés sont partagés avec ChatGPT par l’utilisateur.
+4. Coller la réponse JSON de ChatGPT, ou importer son fichier `.json`, puis **Appliquer les corrections JSON**. Le lot doit être complet : toute réponse incomplète, clé supplémentaire (notamment un verso), mauvais identifiant, doublon, autre document ou modification locale depuis la préparation fait refuser **tout le lot sans modifier les cartes**. Les blocs Markdown `json` autour de la réponse sont acceptés.
+5. Exporter les `.apkg` **sans validation individuelle obligatoire**, pour Basic, Cloze et Occlusion. Les occlusions exigent des masques dessinés, terminés et géométriquement valides ; la revue par numéro reste facultative et son absence est signalée. Les cartes impossibles à exporter restent dans le tableau des problèmes et dans le projet ; elles ne bloquent pas les autres cartes. Une Cloze sans suppression reste à annoter dans l’éditeur, une Occlusion sans masque reste à dessiner.
+6. Télécharger le **projet réimportable ZIP** pour reprendre sur iPad ou dans une nouvelle session : PDF original, toutes les cartes et leurs corrections, médias non masqués, coordonnées, masques et lot ChatGPT actif. Le réimport vérifie le PDF et les médias contre leurs sources (200 Mo maximum, compressés et décompressés). Les gestes de revue d’occlusion sont réinitialisés au réimport, sans empêcher l’export des masques terminés. Le dossier source ZIP historique reste disponible pour l’audit ; il n’est pas le nouveau format de projet et ne peut pas être réimporté directement.
+
+Les identifiants de l’échange sont les GUID Anki de la PR existante : stables pour le même PDF, numéro et type de note, même après correction du recto ou réouverture. Un autre fichier PDF, même visuellement similaire, constitue un autre document. Un seul lot est actif à la fois ; préparer le suivant remplace le précédent. Sauvegarder le projet après préparation permet de quitter l’application avant de revenir avec la réponse de ChatGPT.
+
+Le prompt demande des questions précises pour les puces explicatives uniques, y compris les paragraphes pris pour titres. Il distingue en histologie critères, mode/nature de sécrétion, morphologie, rôle et localisation. Les corrections reçues changent uniquement les rectos : **aucun bloc existant du verso n’est réécrit, retiré ou déplacé**. Lorsqu’un titre est remplacé ou que `move_source_title=true`, son contenu source manquant est ajouté au début du verso, une seule fois. Les suffixes de définition déjà déplacés par V9 ne sont pas dupliqués. Les suppressions Cloze du recto doivent rester identiques ; les types et masques natifs ne sont jamais modifiés par ChatGPT.
+
+Le JSON est un transport, pas une validation médicale : aucun appel à ChatGPT n’est réalisé ou prétendu testé par Anki Studio. L’utilisateur effectue l’échange manuellement et reste responsable de la qualité sémantique des questions. La fidélité intégrale de tout PDF arbitraire ne peut pas être garantie ; la source originale reste conservée.
 
 ### Basic et Cloze
 
@@ -21,17 +27,17 @@ La validation individuelle Basic/Cloze est facultative. L’export ne laisse jam
 
 ### Image Occlusion native
 
-Les huit notes Occlusion des cours peuvent maintenant être annotées dans un **éditeur visuel web**, puis exportées au format natif Anki. Les images sont vierges de masques au départ : l’application n’en crée jamais automatiquement.
+Les huit notes Occlusion recensées lors de la revue précédente peuvent être annotées dans un **éditeur visuel web**, puis exportées au format natif Anki. Les images sont vierges de masques au départ : l’application n’en crée jamais automatiquement.
 
-Dessiner au doigt, au Pencil ou à la souris ; déplacer et redimensionner avec les poignées. Le mode Défiler et le zoom permettent de naviguer sans dessiner. Les rectangles sont associés à des numéros : même numéro = même carte Anki. Prévisualiser chaque numéro masqué, cocher sa vérification, puis valider la note avant export. Toute modification annule ces validations et le téléchargement précédent. Les masques et pixels sont séparés et restent éditables dans un client Anki compatible après import.
+Dessiner au doigt, au Pencil ou à la souris ; déplacer et redimensionner avec les poignées. Le mode Défiler et le zoom permettent de naviguer sans dessiner. Les rectangles sont associés à des numéros : même numéro = même carte Anki. Prévisualiser chaque numéro masqué, cocher sa vérification, puis éventuellement valider la note avant export. Toute modification annule ces validations et le téléchargement précédent. Les masques et pixels sont séparés et restent éditables dans un client Anki compatible après import.
 
-Un export mixte utilise le moteur officiel Anki dans un processus isolé, avec vérification par réimport. Les Basic/Cloze seules conservent le chemin précédent. L’éditeur ne charge aucune ressource externe. Le ZIP source conserve PDF, images non masquées et coordonnées. Biologie 15 comporte deux images : leur composition conserve les placements PDF et les deux fichiers originaux restent dans le paquet.
+Un export mixte utilise le moteur officiel Anki dans un processus isolé, avec vérification par réimport. Les Basic/Cloze seules conservent le chemin précédent. L’éditeur ne charge aucune ressource externe. Le ZIP source conserve PDF, images non masquées et coordonnées ; le projet ZIP permet aussi de reprendre l’édition. Biologie 15 comporte deux images : leur composition conserve les placements PDF et les deux fichiers originaux restent dans le paquet.
 
 Voir [NATIVE_OCCLUSION.md](NATIVE_OCCLUSION.md) pour les huit schémas, la validation, le format et les limites. **Le toucher émulé Chromium est testé ; Safari sur un vrai iPad et l’Apple Pencil physique ne le sont pas.**
 
-## Export immédiat et présentation (V9)
+## Export immédiat et présentation (acquis V9)
 
-Après conversion, utiliser « Exporter toutes les cartes en .apkg ». Sans case à cocher pour Basic/Cloze, les trois cours donnent immédiatement 73 Basic et 4 Cloze. Les huit Occlusions restent exclues tant que leurs masques manuels ne sont pas préparés, prévisualisés et validés. Une Occlusion sans masque n’est jamais annoncée prête à étudier.
+Après conversion, utiliser « Exporter toutes les cartes en .apkg ». Sans case à cocher pour Basic/Cloze, les trois cours donnent immédiatement 73 Basic et 4 Cloze. Les huit Occlusions restent exclues tant que leurs masques manuels ne sont pas préparés et terminés. Une Occlusion sans masque n’est jamais annoncée prête à étudier.
 
 Le tableau de correction distingue les exclusions bloquantes des avertissements. Un verso vide, une Cloze sans suppression, une image manquante/altérée, un ordre d’images modifié ou un retrait invalide exclut uniquement la note concernée. Un texte modifié ou incomplet est explicitement signalé, jamais certifié fidèle. Si des notes sont exclues, utiliser « Exporter les cartes valides en .apkg » ; les autres anomalies restent visibles comme avertissements. Le ZIP conserve toutes les sources.
 
@@ -73,6 +79,8 @@ Pour vérifier les PDF de cours, les placer dans un dossier privé **hors dépô
 ```sh
 ANKI_REFERENCE_DIR=/chemin/vers/pdf-prives .venv/bin/python -m pytest -q
 ```
+
+Les chiffres suivants proviennent de la revue précédente. Dans le nouvel environnement du 12 novembre, les PDF privés sont absents : **120 tests passent et 32 sont ignorés**, dont ceux sur les cours réels. Voir [VALIDATION.md](VALIDATION.md) pour distinguer les nouveaux tests des résultats historiques.
 
 | Fichier | Basic | Cloze | Occlusion | Statut de cette validation |
 |---|---:|---:|---:|---|

@@ -61,7 +61,7 @@ def test_all_original_notes_export_without_losing_basic_or_cloze(
         assert "collection.anki2" in zipfile.ZipFile(io.BytesIO(payload)).namelist()
 
 
-def test_native_grouped_rectangles_produce_distinct_cards_and_unreviewed_notes_are_excluded():
+def test_native_grouped_rectangles_produce_distinct_cards_without_mandatory_review():
     from test_occlusion_state import card
 
     c = reviewed(
@@ -75,4 +75,5 @@ def test_native_grouped_rectangles_produce_distinct_cards_and_unreviewed_notes_a
     payload, plan = build_apkg([c], {0}, "Synthetic grouped IO", "synthetic-io")
     assert plan["notes"] == 1 and plan["cards"] == 2 and payload[:2] == b"PK"
     c["io"]["reviewed"] = []
-    assert not export_plan([c], {0})["included"]
+    assert export_plan([c], set())["included"] == [0]
+    assert any("non revues" in w["reason"] for w in export_plan([c])["warnings"])

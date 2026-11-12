@@ -51,7 +51,7 @@ def test_no_initial_masks_no_automatic_validation_and_no_static_substitution():
     assert dict(c["media"])[c["io"]["canvas"]["name"]].startswith(b"\x89PNG")
 
 
-def test_every_generated_card_requires_preview_and_explicit_review():
+def test_optional_review_requires_preview_but_committed_masks_export_immediately():
     c = card()
     payload = event(c, "commit", 1)
     payload["masks"] = [
@@ -59,6 +59,7 @@ def test_every_generated_card_requires_preview_and_explicit_review():
         for n in (1, 2)
     ]
     c, _ = apply_editor_event(c, payload, "test")
+    assert export_issue(c) is None
     with pytest.raises(ValueError):
         review_group(c, 1, True)
     with pytest.raises(ValueError):
@@ -81,7 +82,8 @@ def test_edit_start_invalidates_approval_before_pointer_up_and_changed_masks_res
     payload = event(c, "commit", 8)
     payload["masks"][0]["left"] = 0.4
     c, _ = apply_editor_event(c, payload, "test")
-    assert not c["io"]["draft"] and fingerprint(c) != before and export_issue(c)
+    assert not c["io"]["draft"] and fingerprint(c) != before
+    assert c["io"]["reviewed"] == [] and export_issue(c) is None is None
 
 
 def test_wrong_canvas_card_session_and_replayed_events_are_ignored():
@@ -95,10 +97,10 @@ def test_wrong_canvas_card_session_and_replayed_events_are_ignored():
     assert not apply_editor_event(c, payload, "test")[1]
 
 
-def test_source_image_or_text_change_invalidates_native_export():
+def test_source_image_damage_blocks_export_but_title_edits_do_not_require_review():
     c = reviewed(card())
     c["front"] = "Edited title"
-    assert export_issue(c)
+    assert export_issue(c) is None
     c = reviewed(card())
     name = c["io"]["canvas"]["name"]
     c["media"] = [(n, b"changed" if n == name else raw) for n, raw in c["media"]]
@@ -118,7 +120,7 @@ def test_coalesced_commit_and_preview_keeps_drawn_geometry_but_never_approves_it
     ]
     c, ok = apply_editor_event(c, payload, "test")
     assert ok and len(c["io"]["masks"]) == 1 and c["io"]["previewed"] == [1]
-    assert c["io"]["reviewed"] == [] and export_issue(c)
+    assert c["io"]["reviewed"] == [] and export_issue(c) is None
     stale = event(c, "commit", "session:1")
     stale["masks"] = []
     assert not apply_editor_event(c, stale, "test")[1]

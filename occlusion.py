@@ -238,6 +238,6 @@ def export_issue(card):
         return str(error)
     if not groups(card):
         return "Dessiner au moins une zone ; aucun masque n’est créé automatiquement."
-    if not ready_to_confirm(card) or state.get("verified") != fingerprint(card):
-        return "Prévisualiser et valider chaque carte Occlusion après la dernière modification."
+    if state.get("draft"):
+        return "Modification en cours : terminer le dessin des zones avant export."
     return None

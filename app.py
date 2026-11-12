@@ -14,12 +14,19 @@ from engine import (
     parse_pdf,
     preview_html,
     render_blocks,
-    restore_source_title,
     update_edited_levels,
 )
 from exporter import build_apkg, export_plan, export_reason, source_bundle, fields_for
 from exporter import cloze_numbers
 from cloze_preview import preview_cloze
+from manual_workflow import (
+    make_request,
+    chatgpt_prompt,
+    apply_corrections,
+    canonical,
+    move_source_title,
+)
+from project import save_project, load_project
 from occlusion import (
     apply_editor_event,
     groups,
@@ -33,28 +40,56 @@ from occlusion_component import editor as occlusion_editor
 
 st.set_page_config(page_title="Anki Studio", page_icon="📚", layout="wide")
 st.title("📚 Anki Studio")
-st.caption("PDF → cartes vérifiées → Anki. Le document source reste la référence.")
-uploaded = st.file_uploader("Importer un PDF balisé CARTE", type=["pdf"])
+st.caption(
+    "PDF → ChatGPT manuel (facultatif et gratuit) → Anki. Le document source reste la référence."
+)
+uploaded = st.file_uploader(
+    "Importer un PDF balisé CARTE ou un projet Anki Studio (.zip)", type=["pdf", "zip"]
+)
 if uploaded is None:
     st.stop()
-data = uploaded.getvalue()
-digest = hashlib.sha256(data).hexdigest()
-if st.session_state.get("digest") != digest:
+input_data = uploaded.getvalue()
+input_id = hashlib.sha256(input_data).hexdigest()
+if st.session_state.get("input_id") != input_id:
     try:
-        with st.spinner("Extraction des textes, positions et images…"):
-            cards = parse_pdf(data)
+        with st.spinner(
+            "Lecture du projet ou extraction des textes, positions et images…"
+        ):
+            if uploaded.name.lower().endswith(".zip"):
+                loaded = load_project(input_data)
+                data, cards, digest = loaded["data"], loaded["cards"], loaded["digest"]
+                document_name, exchange = loaded["name"], loaded["exchange"]
+                validated_input = loaded["validated"]
+            else:
+                data = input_data
+                digest = input_id
+                cards = parse_pdf(data)
+                document_name, exchange, validated_input = (
+                    Path(uploaded.name).stem,
+                    None,
+                    set(),
+                )
     except Exception as error:
-        st.error(f"Lecture du PDF impossible : {error}")
+        st.error(f"Lecture impossible : {error}")
         st.stop()
     st.session_state.update(
+        input_id=input_id,
+        pdf_data=data,
+        document_name=document_name,
         digest=digest,
         cards=cards,
         edits={},
-        validated=set(),
+        validated=validated_input,
         revisions={},
         apkg=None,
         bundle=None,
+        project_payload=None,
+        exchange=exchange,
+        correction_notice=None,
+        export_selection=None,
     )
+data = st.session_state.pdf_data
+digest = st.session_state.digest
 cards = [st.session_state.edits.get(i, c) for i, c in enumerate(st.session_state.cards)]
 validated = st.session_state.validated
 if not cards:
@@ -76,8 +111,80 @@ st.write(
 )
 st.info(
     "Basic et Cloze : export immédiat après les contrôles automatiques. La revue individuelle est facultative. "
-    "les titres incertains sont signalés. Une image ou une zone ambiguë n’est pas une carte perdue."
+    "Les titres incertains sont signalés. Une image ou une zone ambiguë n’est pas une carte perdue."
 )
+mode = st.radio("Méthode", ["Sans IA", "ChatGPT manuel (gratuit)"], horizontal=True)
+if mode == "ChatGPT manuel (gratuit)":
+    st.subheader("1. Préparer un lot pour ChatGPT")
+    st.caption(
+        "Aucune API ni connexion automatique. Le JSON contient les textes et les retraits, sans PDF ni images. "
+        "Copiez le prompt dans ChatGPT, puis collez sa réponse ici. Choisissez de petits lots si nécessaire. "
+        "Les textes copiés seront partagés avec ChatGPT selon votre utilisation de ce service."
+    )
+    first = st.number_input(
+        "Première carte du lot", min_value=1, max_value=len(cards), value=1, step=1
+    )
+    batch_size = st.number_input(
+        "Nombre de cartes du lot",
+        min_value=1,
+        max_value=len(cards),
+        value=min(20, len(cards)),
+        step=1,
+    )
+    if st.button("Générer le JSON et le prompt"):
+        request, states = make_request(
+            cards, digest, range(first - 1, min(len(cards), first - 1 + batch_size))
+        )
+        st.session_state.exchange = dict(request=request, states=states)
+        st.session_state.project_payload = None
+        st.session_state.correction_notice = None
+    exchange = st.session_state.exchange
+    if exchange:
+        request = exchange["request"]
+        st.caption(
+            f"Lot actif : {len(request['cards'])} cartes · référence {request['request_id'][:12]}"
+        )
+        st.code(chatgpt_prompt(request), language="text")
+        st.download_button(
+            "Télécharger le JSON léger",
+            canonical(request),
+            file_name="cartes_chatgpt.json",
+            mime="application/json",
+        )
+        st.subheader("2. Réimporter les rectos corrigés")
+        answer = st.text_area(
+            "Réponse JSON de ChatGPT", key="answer_" + request["request_id"], height=180
+        )
+        answer_file = st.file_uploader(
+            "Ou importer la réponse JSON",
+            type=["json"],
+            key="answer_file_" + request["request_id"],
+        )
+        if st.button("Appliquer les corrections JSON"):
+            try:
+                corrected, changed = apply_corrections(
+                    cards,
+                    digest,
+                    request,
+                    exchange["states"],
+                    answer_file.getvalue() if answer_file else answer,
+                )
+                for i in changed:
+                    st.session_state.edits[i] = corrected[i]
+                    st.session_state.revisions[i] = (
+                        st.session_state.revisions.get(i, 0) + 1
+                    )
+                    validated.discard(i)
+                st.session_state.apkg = None
+                st.session_state.bundle = None
+                st.session_state.project_payload = None
+                st.session_state.correction_notice = f"{len(changed)} carte(s) corrigée(s). Versos existants et images conservés."
+                st.rerun()
+            except (ValueError, TypeError, KeyError, UnicodeError) as error:
+                st.error(f"Corrections refusées, aucune carte modifiée : {error}")
+    if st.session_state.correction_notice:
+        st.success(st.session_state.correction_notice)
+
 index = st.selectbox(
     "Choisir une carte",
     range(len(cards)),
@@ -90,6 +197,8 @@ index = st.selectbox(
 card = cards[index]
 revision = st.session_state.revisions.get(index, 0)
 prefix = f"{digest}_{index}_{revision}"
+if uploaded.name.lower().endswith(".zip"):
+    prefix += "_" + input_id[:12]
 zoom = st.slider("Zoom du PDF original", 1.0, 4.0, 2.0, 0.25)
 side = st.radio("Aperçu", ["Verso", "Recto"], horizontal=True)
 layout = st.radio("Disposition", ["Côte à côte", "Verticale"], horizontal=True)
@@ -149,8 +258,8 @@ if card["type"] == "CARTE OCCLUSION" and card.get("io", {}).get("canvas"):
     st.caption(
         "Aucun masque automatique. Dessiner, déplacer ou redimensionner ; utiliser Défiler pour naviguer dans l’image. Chaque modification annule la validation."
     )
-    editor_id = f"{digest}:{index}:{card['io']['canvas']['sha256']}"
-    event = occlusion_editor(card, editor_id, key=f"io_{digest}_{index}")
+    editor_id = f"{input_id}:{index}:{card['io']['canvas']['sha256']}"
+    event = occlusion_editor(card, editor_id, key=f"io_{input_id}_{index}")
     try:
         before_editor = fingerprint(card)
         updated, accepted = apply_editor_event(card, event, editor_id)
@@ -164,10 +273,12 @@ if card["type"] == "CARTE OCCLUSION" and card.get("io", {}).get("canvas"):
                 validated.discard(index)
                 st.session_state.apkg = None
                 st.session_state.bundle = None
+                st.session_state.project_payload = None
     except (ValueError, KeyError, TypeError) as error:
         validated.discard(index)
         st.session_state.apkg = None
         st.session_state.bundle = None
+        st.session_state.project_payload = None
         invalidate(card)
         card["io"]["draft"] = True
         st.session_state.edits[index] = card
@@ -185,7 +296,7 @@ if card["type"] == "CARTE OCCLUSION" and card.get("io", {}).get("canvas"):
         review_group(card, number, group_checked)
     if groups(card) and not ready_to_confirm(card):
         st.info(
-            "Dans l’éditeur : afficher l’aperçu masqué de chaque numéro, puis cocher sa vérification ci-dessus."
+            "Revue facultative : afficher l’aperçu masqué de chaque numéro, puis cocher sa vérification ci-dessus. L’export des masques terminés reste possible sans ces cases."
         )
     if state["draft"]:
         st.warning("Modification en cours : l’export de cette note est désactivé.")
@@ -269,7 +380,7 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
                     if block["bullet"] and not block.get("bullet_text"):
                         block["bullet_text"] = "•"
             if restore_title:
-                restore_source_title(updated, st.session_state.cards[index]["title"])
+                move_source_title(updated)
             updated["levels"] = update_edited_levels(updated["blocks"])
             updated["back"] = render_blocks(updated["blocks"])
             if updated.get("io"):
@@ -290,11 +401,12 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
             validated.discard(index)
             st.session_state.apkg = None
             st.session_state.bundle = None
+            st.session_state.project_payload = None
             st.rerun()
         except (ValueError, TypeError) as error:
             st.error(str(error))
 
-st.subheader("Revue de fidélité — facultative pour Basic et Cloze")
+st.subheader("Revue de fidélité — facultative pour tous les types")
 is_io = card["type"] == "CARTE OCCLUSION"
 can_confirm = not is_io or ready_to_confirm(card)
 verify_key = "verified_" + prefix
@@ -329,6 +441,7 @@ selection = (tuple(plan["included"]), tuple(sorted(validated)))
 if st.session_state.get("export_selection") != selection:
     st.session_state.apkg = None
     st.session_state.bundle = None
+    st.session_state.project_payload = None
     st.session_state.export_selection = selection
 st.write(f"{len(validated)} / {len(cards)} notes vérifiées.")
 st.subheader("Exporter vers Anki")
@@ -369,7 +482,7 @@ if plan["excluded"] or plan["warnings"]:
     )
 st.caption(
     "Les Basic et Cloze compatibles sont exportables immédiatement, sans validation individuelle. Les anomalies bloquantes sont exclues et signalées ; les autres sont exportées avec avertissements. "
-    "Une note Cloze ou Occlusion peut produire plusieurs cartes. Seules les zones dessinées, prévisualisées et validées sont exportées au format natif ; les sources restent inchangées."
+    "Une note Cloze ou Occlusion peut produire plusieurs cartes. Les zones dessinées et terminées sont exportées au format natif ; leur revue reste facultative. Les sources restent inchangées."
 )
 if st.button(
     "Exporter toutes les cartes en .apkg"
@@ -378,7 +491,9 @@ if st.button(
     disabled=not plan["included"],
 ):
     try:
-        payload, report = build_apkg(cards, validated, Path(uploaded.name).stem, digest)
+        payload, report = build_apkg(
+            cards, validated, st.session_state.document_name, digest
+        )
         st.session_state.apkg = payload
         st.success(
             f"Archive vérifiée : {report['notes']} notes, {report['cards']} cartes et médias contrôlés."
@@ -407,5 +522,28 @@ if st.session_state.bundle:
     )
 st.caption(
     "Le dossier source contient le PDF original, toutes les notes, les images et les zones PDF. "
-    "Les zones validées sont exportées en notes Image Occlusion natives, éditables dans un client Anki compatible."
+    "Les zones dessinées sont exportées en notes Image Occlusion natives, éditables dans un client Anki compatible."
 )
+
+st.subheader("Conserver et reprendre le projet")
+st.caption(
+    "Le projet ZIP réimportable conserve le PDF, toutes les cartes, les corrections, les images, les masques et le lot ChatGPT actif. Importez-le en haut de cette page pour reprendre, même sans IA."
+)
+if st.button("Préparer le projet réimportable (.zip)"):
+    try:
+        st.session_state.project_payload = save_project(
+            data,
+            cards,
+            validated,
+            st.session_state.document_name,
+            st.session_state.exchange,
+        )
+    except (ValueError, TypeError) as error:
+        st.error(f"Sauvegarde impossible : {error}")
+if st.session_state.project_payload:
+    st.download_button(
+        "Télécharger le projet réimportable",
+        st.session_state.project_payload,
+        file_name="anki_studio_projet.zip",
+        mime="application/zip",
+    )
