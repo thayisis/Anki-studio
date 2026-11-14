@@ -213,6 +213,8 @@
       (e.pointerType === "mouse" && e.button !== 0)
     )
       return;
+    // Explicitly suppress browser scrolling as soon as a drawing gesture starts.
+    e.preventDefault();
     const box = svg.getBoundingClientRect(),
       p = point(e, box),
       handle = e.target.getAttribute("data-handle"),
@@ -266,6 +268,11 @@
     e.preventDefault();
     draw();
   });
+  // Safari may emit touch gestures independently of Pointer Events.
+  // Prevent native panning only while the user is drawing/editing.
+  $("viewport").addEventListener("touchmove", (e) => {
+    if (mode !== "pan" && view === "edit") e.preventDefault();
+  }, { passive: false });
   svg.addEventListener("pointermove", (e) => {
     if (!gesture || e.pointerId !== gesture.id) return;
     e.preventDefault();
