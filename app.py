@@ -38,8 +38,54 @@ from occlusion import (
 )
 from occlusion_component import editor as occlusion_editor
 
-st.set_page_config(page_title="Anki Studio", page_icon="📚", layout="wide")
-st.title("📚 Anki Studio")
+st.set_page_config(page_title="Deckly ♡", page_icon="🎀", layout="wide")
+# Deckly visual identity: CSS-only theme, no changes to parsing, editing or export.
+st.markdown(
+    """
+    <style>
+    :root {
+      --deckly-bg: #FFFBFC;
+      --deckly-surface: #FFFFFF;
+      --deckly-border: #F1E4E9;
+      --deckly-accent: #AD7189;
+      --deckly-text: #563745;
+    }
+    .stApp, [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] { background-color: var(--deckly-bg); }
+    [data-testid="stHeader"] { background: rgba(255,251,252,.94); }
+    h1, h2, h3 { color: var(--deckly-text); letter-spacing: -.02em; }
+    h1 { font-weight: 750; }
+    [data-testid="stCaptionContainer"] { color: #946F7D; }
+    div.stButton > button[kind="primary"],
+    div.stDownloadButton > button[kind="primary"] {
+      background: var(--deckly-accent);
+      color: white;
+      border-color: var(--deckly-accent);
+    }
+    div.stButton > button, div.stDownloadButton > button {
+      border-radius: 10px;
+      border-color: #E7CCD6;
+    }
+    div.stButton > button:hover, div.stDownloadButton > button:hover {
+      border-color: var(--deckly-accent);
+      color: var(--deckly-accent);
+    }
+    [data-testid="stFileUploader"] section {
+      background: var(--deckly-surface);
+      border-color: #E7CCD6;
+      border-radius: 12px;
+    }
+    [data-testid="stExpander"] {
+      background: var(--deckly-surface);
+      border: 1px solid var(--deckly-border);
+      border-radius: 12px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+st.title("deckly.")
+st.caption("Your notes, your cards, your way. ♡")
 st.caption(
     "PDF → ChatGPT manuel (facultatif et gratuit) → Anki. Le document source reste la référence."
 )
