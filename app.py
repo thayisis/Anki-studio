@@ -369,6 +369,24 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
             key="restore_" + prefix,
             disabled=card.get("source_title_restored", False),
         )
+        # An empty Basic/Cloze back has no rows to edit; offer a dedicated field.
+        empty_back = (
+            card["type"] in ("CARTE", "CARTE CLOZE")
+            and not any(
+                block["kind"] == "text" and block.get("text", "").strip()
+                or block["kind"] == "image"
+                for block in card["blocks"]
+            )
+        )
+        new_back = (
+            st.text_area(
+                "Texte du verso (une ligne par paragraphe)",
+                key="new_back_" + prefix,
+                height=180,
+                placeholder="Écris ici le contenu du verso…",
+            )
+            if empty_back else ""
+        )
         rows = [
             {
                 "Élément": "Image" if b["kind"] == "image" else "Texte",
@@ -427,6 +445,18 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
                     block["bullet"] = bool(row["Puce"])
                     if block["bullet"] and not block.get("bullet_text"):
                         block["bullet_text"] = "•"
+            if empty_back and new_back.strip():
+                updated["blocks"].extend(
+                    {
+                        "kind": "text",
+                        "text": line,
+                        "indent": 0.0,
+                        "bullet": False,
+                        "level": 0,
+                    }
+                    for line in new_back.splitlines()
+                    if line.strip()
+                )
             if restore_title:
                 move_source_title(updated)
             updated["levels"] = update_edited_levels(updated["blocks"])
