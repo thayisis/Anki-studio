@@ -32,45 +32,40 @@ def upload():
     return f
 
 
-def test_ui_validation_partial_export_edit_invalidates_download_and_review():
+def test_ui_partial_export_and_edit_invalidates_download():
     with patch("streamlit.file_uploader", return_value=upload()):
         at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py").run()
         assert not at.exception
-        assert not button(at, "Exporter les cartes valides en .apkg").disabled
-        at.checkbox[-1].check().run()
-        assert not at.exception
-        assert at.session_state["validated"] == {0}
-        button(at, "Exporter les cartes valides en .apkg").click().run()
+        export = button(at, "Exporter les cartes valides en .apkg")
+        assert not export.disabled
+        export.click().run()
         assert not at.exception
         assert at.session_state["apkg"][:2] == b"PK"
-        at.text_area[0].set_value("Corrected title")
+        next(t for t in at.text_area if t.label == "Titre exact").set_value(
+            "Corrected title"
+        )
         button(at, "Enregistrer les corrections").click().run()
         assert not at.exception
         assert at.session_state["validated"] == set()
         assert at.session_state["apkg"] is None
         assert at.session_state["edits"][0]["title"] == "Corrected title"
-        assert not at.checkbox[-1].value
         assert not button(at, "Exporter les cartes valides en .apkg").disabled
 
 
-def test_ui_switch_cards_keeps_reviews_independent_and_retains_empty_occlusion():
+def test_ui_switch_cards_retains_empty_occlusion_without_review_checkboxes():
     with patch("streamlit.file_uploader", return_value=upload()):
         at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py").run()
-        at.checkbox[-1].check().run()
+        assert not at.exception
+        assert at.session_state["validated"] == set()
         at.selectbox[0].select(1).run()
         assert not at.exception
-        assert not at.checkbox[-1].value
-        at.checkbox[-1].check().run()
-        assert at.session_state["validated"] == {0, 1}
-        # A validated Cloze without deletions is still excluded.
         assert any("sans suppression" in str(df.value) for df in at.dataframe)
         at.selectbox[0].select(2).run()
         assert not at.exception
         assert any("Titre absent" in w.value for w in at.warning)
         at.selectbox[0].select(0).run()
-        assert at.checkbox[-1].value
-        at.checkbox[-1].uncheck().run()
-        assert at.session_state["validated"] == {1}
+        assert not at.exception
+        assert at.session_state["validated"] == set()
         assert not button(at, "Exporter les cartes valides en .apkg").disabled
 
 
@@ -133,7 +128,6 @@ def test_real_reviewed_basic_and_cloze_can_be_validated_and_exported(
         assert not at.exception
         assert at.text_area[0].value == expected_title
         assert at.checkbox[0].disabled  # Source already restored exactly once.
-        at.checkbox[-1].check().run()
         button(at, "Exporter les cartes valides en .apkg").click().run()
         assert not at.exception and at.session_state["apkg"][:2] == b"PK"
         assert not at.error
