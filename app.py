@@ -222,12 +222,16 @@ zoom = st.slider("Zoom du PDF original", 1.0, 4.0, 2.0, 0.25)
 left, right = st.columns(2)
 with left:
     st.subheader("PDF original")
-    region = st.selectbox(
-        "Page de cette carte",
-        range(len(card["regions"])),
-        format_func=lambda r: f"Page {card['regions'][r]['page'] + 1}",
-        key="region_" + prefix,
-    )
+    # Single-page PDFs need no page selector; preserve multi-page navigation.
+    if len(card["regions"]) == 1:
+        region = 0
+    else:
+        region = st.selectbox(
+            "Page de cette carte",
+            range(len(card["regions"])),
+            format_func=lambda r: f"Page {card['regions'][r]['page'] + 1}",
+            key="region_" + prefix,
+        )
     try:
         image = crop(data, card, zoom, region)
         encoded = base64.b64encode(image).decode()
