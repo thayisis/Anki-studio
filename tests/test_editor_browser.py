@@ -137,7 +137,7 @@ def test_touch_draw_move_resize_preview_zoom_and_responsive_coordinates(browser_
     assert m["left"] == pytest.approx(0.1, abs=0.005) and m["width"] == pytest.approx(
         0.3, abs=0.005
     )
-    assert page.evaluate("events[0].kind") == "editing"
+    assert page.evaluate("events[0].kind") == "commit"  # Completed gestures are committed only on pointerup.
     page.locator("#select").click()
     touch_drag(page, context, xy(page, 0.25, 0.225), xy(page, 0.35, 0.275))
     m = last_masks(page)[0]
@@ -202,7 +202,7 @@ def test_pen_pointer_events_cancel_undo_redo_and_grouping(browser_editor):
                 bubbles=True,
             ),
         )
-        if kind in ("pointerup", "pointercancel"):
+        if kind == "pointerup":
             page.wait_for_function(
                 "n=>events.filter(e=>e.kind==='commit').length>n",
                 arg=before,
