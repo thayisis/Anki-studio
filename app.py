@@ -436,7 +436,7 @@ if st.session_state.get("export_selection") != selection:
     st.session_state.bundle = None
     st.session_state.project_payload = None
     st.session_state.export_selection = selection
-st.write(f"{len(validated)} / {len(cards)} notes vérifiées.")
+# The optional verification counter is intentionally hidden from the UI.
 st.subheader("Exporter vers Anki")
 st.write(
     f"**{plan['notes']} notes incluses → {plan['cards']} cartes Anki** · "
