@@ -185,9 +185,28 @@ if mode == "ChatGPT manuel (gratuit)":
     if st.session_state.correction_notice:
         st.success(st.session_state.correction_notice)
 
+io_indices = [i for i, c in enumerate(cards) if c["type"] == "CARTE OCCLUSION" and c.get("io", {}).get("canvas")]
+io_mode = st.toggle("Gérer les occlusions", disabled=not io_indices, key="io_mode")
+if io_mode and io_indices:
+    selected = st.session_state.get(f"select_{digest}", io_indices[0])
+    if selected not in io_indices:
+        st.session_state[f"select_{digest}"] = io_indices[0]
+    position = io_indices.index(st.session_state[f"select_{digest}"])
+    a, b, c = st.columns([1, 2, 1])
+    with a:
+        if st.button("← Précédente", disabled=position == 0):
+            st.session_state[f"select_{digest}"] = io_indices[position - 1]
+            st.rerun()
+    with b:
+        st.caption(f"Occlusion {position + 1} / {len(io_indices)}")
+    with c:
+        if st.button("Suivante →", disabled=position == len(io_indices) - 1):
+            st.session_state[f"select_{digest}"] = io_indices[position + 1]
+            st.rerun()
+
 index = st.selectbox(
     "Choisir une carte",
-    range(len(cards)),
+    io_indices if io_mode and io_indices else range(len(cards)),
     format_func=lambda i, reviewed=frozenset(validated): (
         f"{'✓ ' if i in reviewed else ''}{i + 1} · "
         f"{' — '.join(cards[i]['context'] + [cards[i]['title']])[:90] or ('[Occlusion sans titre]' if cards[i]['type'] == 'CARTE OCCLUSION' else '[Titre à renseigner]')}"
@@ -200,11 +219,7 @@ prefix = f"{digest}_{index}_{revision}"
 if uploaded.name.lower().endswith(".zip"):
     prefix += "_" + input_id[:12]
 zoom = st.slider("Zoom du PDF original", 1.0, 4.0, 2.0, 0.25)
-side = st.radio("Aperçu", ["Verso", "Recto"], horizontal=True)
-layout = st.radio("Disposition", ["Côte à côte", "Verticale"], horizontal=True)
-left, right = (
-    st.columns(2) if layout == "Côte à côte" else (st.container(), st.container())
-)
+left, right = st.columns(2)
 with left:
     st.subheader("PDF original")
     region = st.selectbox(
@@ -226,30 +241,27 @@ with left:
         st.error(f"Aperçu du PDF impossible : {error}")
 with right:
     st.subheader("Carte Anki")
-    content = (
-        card["front"]
-        if side == "Recto"
-        else preview_html(render_blocks(card["blocks"]), card["media"])
-    )
+    front_content = card["front"]
+    back_content = preview_html(render_blocks(card["blocks"]), card["media"])
     if card["type"] == "CARTE CLOZE":
         numbers = sorted(cloze_numbers(fields_for(card)[0]))
         active = (
             st.selectbox("Suppression Cloze", numbers, key="cloze_" + prefix)
-            if len(numbers) > 1
-            else numbers[0]
-            if numbers
-            else 1
+            if len(numbers) > 1 else numbers[0] if numbers else 1
         )
-        content = preview_cloze(
-            preview_html(fields_for(card)[0], card["media"]),
-            answer=side == "Verso",
-            active_number=active,
-        )
+        source = preview_html(fields_for(card)[0], card["media"])
+        front_content = preview_cloze(source, answer=False, active_number=active)
+        back_content = preview_cloze(source, answer=True, active_number=active)
     components.html(
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<div style="font:18px/1.5 sans-serif;white-space:pre-wrap;overflow-wrap:anywhere">'
-        + content
-        + "</div>",
+        '<div style="font:18px/1.5 sans-serif;overflow-wrap:anywhere">'
+        '<div style="font-size:13px;color:#666">RECTO</div>'
+        '<div style="padding:14px;border:1px solid #bbb;border-radius:9px">'
+        + front_content +
+        '</div><hr style="margin:20px 0">'
+        '<div style="font-size:13px;color:#666">VERSO</div>'
+        '<div style="padding:14px;border:1px solid #bbb;border-radius:9px">'
+        + back_content + '</div></div>',
         height=620,
         scrolling=True,
     )
@@ -301,8 +313,9 @@ if card["type"] == "CARTE OCCLUSION" and card.get("io", {}).get("canvas"):
     if state["draft"]:
         st.warning("Modification en cours : l’export de cette note est désactivé.")
 
-for warning in card["warnings"]:
-    st.warning(warning)
+with st.expander("Afficher les problèmes potentiels", expanded=False):
+    for warning in card["warnings"]:
+        st.warning(warning)
 
 with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
     st.caption(
@@ -406,7 +419,7 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
         except (ValueError, TypeError) as error:
             st.error(str(error))
 
-st.subheader("Revue de fidélité — facultative pour tous les types")
+st.caption("Vérification facultative")
 is_io = card["type"] == "CARTE OCCLUSION"
 can_confirm = not is_io or ready_to_confirm(card)
 verify_key = "verified_" + prefix
@@ -454,7 +467,8 @@ if plan["warnings"]:
         "Export avec avertissements : les contrôles automatiques ne garantissent pas la fidélité sémantique. Consultez le tableau de correction."
     )
 if plan["excluded"] or plan["warnings"]:
-    st.dataframe(
+    with st.expander("Afficher le tableau des problèmes potentiels", expanded=False):
+        st.dataframe(
         [
             {
                 "Carte": e["index"] + 1,
