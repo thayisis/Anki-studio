@@ -107,3 +107,20 @@ label {
 #status {
   min-height: 24px;
 }
+
+/* On iPad, drawing must never trigger scrolling of the image or page. */
+#viewport:not(.pan) {
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+}
+#viewport:not(.pan) #stage,
+#viewport:not(.pan) #image,
+#viewport:not(.pan) #overlay {
+  touch-action: none;
+}
+#viewport.pan {
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
