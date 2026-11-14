@@ -103,19 +103,9 @@ def test_draw_review_download_and_invalidate_in_actual_streamlit(local_app, tmp_
                 box["x"] + 0.4 * box["width"], box["y"] + 0.4 * box["height"], steps=8
             )
             page.mouse.up()
-            group_label = (
-                "Carte Anki 1 : j’ai vérifié les zones masquées et la réponse."
-            )
-            group = page.get_by_label(group_label, exact=True)
-            expect(group).to_be_disabled()
+            # Finished occlusion masks are immediately exportable; review is optional.
             expect(button).to_be_enabled(timeout=15000)
             frame.locator("#question").click()
-            expect(group).to_be_enabled(timeout=15000)
-            page.get_by_text(group_label, exact=True).click()
-            expect(group).to_be_checked()
-            overall = "J’ai comparé le titre, chaque ligne, les retraits, les images et leur ordre avec le PDF."
-            page.get_by_text(overall, exact=True).click()
-            expect(button).to_be_enabled(timeout=15000)
             button.click()
             page.get_by_text(
                 "Archive vérifiée : 1 notes, 1 cartes et médias contrôlés.", exact=True
@@ -131,8 +121,8 @@ def test_draw_review_download_and_invalidate_in_actual_streamlit(local_app, tmp_
             with zipfile.ZipFile(tmp_path / "download.apkg") as archive:
                 assert archive.testzip() is None
 
-            # Switching notes recreates the frame but must preserve saved masks
-            # and reviews; an unedited second note must still start completely blank.
+            # Switching notes recreates the frame but must preserve saved masks;
+            # an unedited second note must still start completely blank.
             page.get_by_role("combobox").first.click()
             page.get_by_role("combobox").first.press("ArrowDown")
             page.get_by_role("combobox").first.press("Enter")
@@ -157,7 +147,6 @@ def test_draw_review_download_and_invalidate_in_actual_streamlit(local_app, tmp_
                     doc.querySelectorAll('svg rect[data-mask]').length === 1;
             }""")
             expect(frame.locator("svg rect[data-mask]").first).to_be_attached()
-            expect(page.get_by_label(overall, exact=True)).to_be_checked()
             # Any new geometry must disable export and remove the old download.
             frame.locator("#draw").click()
             frame.locator("#overlay").scroll_into_view_if_needed()
