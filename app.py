@@ -109,10 +109,7 @@ st.write(
     f"**{len(cards)} marqueurs / notes détectés** · {counts['CARTE']} Basic · "
     f"{counts['CARTE CLOZE']} Cloze · {counts['CARTE OCCLUSION']} Occlusion"
 )
-st.info(
-    "Basic et Cloze : export immédiat après les contrôles automatiques. La revue individuelle est facultative. "
-    "Les titres incertains sont signalés. Une image ou une zone ambiguë n’est pas une carte perdue."
-)
+
 mode = st.radio("Méthode", ["Sans IA", "ChatGPT manuel (gratuit)"], horizontal=True)
 if mode == "ChatGPT manuel (gratuit)":
     st.subheader("1. Préparer un lot pour ChatGPT")
