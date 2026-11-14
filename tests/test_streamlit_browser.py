@@ -158,7 +158,9 @@ def test_draw_review_download_and_invalidate_in_actual_streamlit(local_app, tmp_
             page.mouse.move(
                 box["x"] + 0.8 * box["width"], box["y"] + 0.35 * box["height"], steps=8
             )
-            expect(button).to_be_disabled(timeout=15000)
+            # While dragging, the previous completed mask remains exportable.
+            # Only pointerup commits the new geometry and invalidates the download.
+            expect(button).to_be_enabled(timeout=15000)
             page.mouse.up()
             expect(button).to_be_enabled(timeout=15000)
             expect(link).to_have_count(0)
