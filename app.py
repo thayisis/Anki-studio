@@ -423,32 +423,8 @@ with st.expander("Corriger le titre, le texte et les retraits", expanded=False):
         except (ValueError, TypeError) as error:
             st.error(str(error))
 
-st.caption("Vérification facultative")
-is_io = card["type"] == "CARTE OCCLUSION"
-can_confirm = not is_io or ready_to_confirm(card)
-verify_key = "verified_" + prefix
-if is_io:
-    verify_key += (
-        "_"
-        + fingerprint(card)
-        + str(card["io"]["epoch"])
-        + str(card["io"]["reviewed"])
-        + str(card["io"]["draft"])
-    )
-checked = st.checkbox(
-    "J’ai comparé le titre, chaque ligne, les retraits, les images et leur ordre avec le PDF.",
-    value=index in validated and can_confirm,
-    key=verify_key,
-    disabled=not can_confirm,
-)
-if checked and can_confirm:
-    if is_io:
-        confirm_note(card)
-    validated.add(index)
-else:
-    validated.discard(index)
-    if is_io:
-        card["io"]["verified"] = None
+# Manual fidelity verification UI intentionally hidden.
+# Preserve existing validated state and export/occlusion safety checks.
 current_issue = export_reason(card)
 if current_issue:
     st.info(current_issue)
