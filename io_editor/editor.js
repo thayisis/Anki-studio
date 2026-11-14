@@ -257,8 +257,9 @@
       before,
       original: clone(m),
     };
-    // Invalidate before the drag finishes; a pending edit cannot reuse a prior approval.
-    send("editing");
+    // Keep the drawing gesture entirely local until pointerup.
+    // A Streamlit rerun during pointerdown can remount the iframe and cancel
+    // touch/Pencil gestures before a rectangle is completed.
     try {
       svg.setPointerCapture(e.pointerId);
     } catch (_) {}
@@ -314,7 +315,13 @@
       masks = g.before;
       if (!masks.some((x) => x.id === selected)) selected = null;
     }
-    commit(g.before);
+    // Only completed gestures are sent to Streamlit; invalid gestures
+    // leave the server state unchanged.
+    if (JSON.stringify(g.before) !== JSON.stringify(masks)) {
+      commit(g.before);
+    } else {
+      draw();
+    }
   }
   svg.addEventListener("pointerup", (e) => finish(e));
   svg.addEventListener("pointercancel", (e) => finish(e, true));
