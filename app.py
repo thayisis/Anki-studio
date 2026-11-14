@@ -270,9 +270,9 @@ with right:
         scrolling=True,
     )
 if card["type"] == "CARTE OCCLUSION" and card.get("io", {}).get("canvas"):
-    st.subheader("Dessiner et vérifier les zones d’occlusion")
+    st.subheader("Dessiner les zones d’occlusion")
     st.caption(
-        "Aucun masque automatique. Dessiner, déplacer ou redimensionner ; utiliser Défiler pour naviguer dans l’image. Chaque modification annule la validation."
+        "Aucun masque automatique. Dessiner, déplacer ou redimensionner ; utiliser Défiler pour naviguer dans l’image."
     )
     editor_id = f"{input_id}:{index}:{card['io']['canvas']['sha256']}"
     event = occlusion_editor(card, editor_id, key=f"io_{input_id}_{index}")
@@ -301,19 +301,7 @@ if card["type"] == "CARTE OCCLUSION" and card.get("io", {}).get("canvas"):
         cards[index] = card
         st.error(f"Zones refusées : {error}")
     state = card["io"]
-    fp = fingerprint(card)
-    for number in groups(card):
-        group_checked = st.checkbox(
-            f"Carte Anki {number} : j’ai vérifié les zones masquées et la réponse.",
-            value=number in state["reviewed"],
-            disabled=state["draft"] or number not in state["previewed"],
-            key=f"io_review_{prefix}_{fp}_{state['epoch']}_{number}",
-        )
-        review_group(card, number, group_checked)
-    if groups(card) and not ready_to_confirm(card):
-        st.info(
-            "Revue facultative : afficher l’aperçu masqué de chaque numéro, puis cocher sa vérification ci-dessus. L’export des masques terminés reste possible sans ces cases."
-        )
+    # Optional per-mask review controls are intentionally not shown.
     if state["draft"]:
         st.warning("Modification en cours : l’export de cette note est désactivé.")
 
